@@ -77,10 +77,7 @@ Regression test added (`matching.test.ts`).
 
 ## What's NOT built yet
 
-- CLI subcommands (`optoutos person add/edit/list/link`) to actually
-  populate the store day to day — the storage layer, schema, and scoring are
-  built and tested; the CLI UX is the next piece.
-- Any migration path for `formatVersion` bumps beyond `1`.
-- No integration yet between the household store and `runRemoval()`/the CLI
-  `run` command — currently `apps/cli run` still takes a single
-  `PiiProfile` JSON file per invocation, not a household + person selector.
+- ~~CLI subcommands~~ **DONE (2026-09-09)**: `person add/edit/list/link` and
+  `run --person <id> --store <path>` are implemented in `apps/cli`. See its
+  README for usage. Verified live end-to-end against a real broker.
+- No migration path for `formatVersion` bumps beyond `1`.

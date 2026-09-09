@@ -1,8 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
-import { PiiProfileSchema, runRemoval, type PiiProfile } from "@optoutos/core";
-import { parseArgs } from "./args.js";
+import { PiiProfileSchema, runRemoval, type PiiProfile, type PersonRecord } from "@optoutos/core";
+import { parseArgs, type StoreSelector } from "./args.js";
 import { getBrokerAdapter, listBrokerIds } from "./registry.js";
+import { resolveStore } from "./store-factory.js";
+import { addPerson, editPerson, listPeople, linkPeople } from "./person-commands.js";
 
 const HELP_TEXT = `
 OptOutOS CLI — local-first data-broker removal, run entirely on your machine.
@@ -10,6 +12,11 @@ OptOutOS CLI — local-first data-broker removal, run entirely on your machine.
 Usage:
   optoutos list-brokers
   optoutos run --broker <brokerId> --profile <path-to-profile.json> [--execute]
+  optoutos run --broker <brokerId> --person <personId> --store <path> [--execute]
+  optoutos person add --store <path> --first <name> --last <name> [--email ...] [--phone ...] [--street --city --state --zip] [--dob YYYY-MM-DD] [--notes ...]
+  optoutos person edit --store <path> --id <personId> [same optional fields as add]
+  optoutos person list --store <path>
+  optoutos person link --store <path> --a <personId> --b <personId> --type <spouse|parent|child|sibling|other>
 
 Commands:
   list-brokers            List all supported broker ids.
@@ -19,24 +26,54 @@ Commands:
                            still refuse if the broker requires manual
                            verification, e.g. an active CAPTCHA/Turnstile
                            challenge; this project never bypasses those).
+  person add/edit/list/link
+                           Manage a persistent, encrypted, multi-person
+                           household store. See docs/PEOPLE_STORE.md.
 
 Options for 'run':
   --broker <id>           Required. Run 'list-brokers' to see valid ids.
-  --profile <path>        Required. Path to a JSON file matching the
-                           PiiProfile schema (see packages/core/src/pii.ts).
-                           Your PII is read from this local file only —
-                           nothing is sent anywhere except the target
-                           broker's own search/opt-out endpoints.
+  --profile <path>        Path to a JSON file matching the PiiProfile
+                           schema. Mutually exclusive with --person.
+  --person <id> --store <path>
+                           Load this person from a household store instead
+                           of a standalone profile file. Mutually exclusive
+                           with --profile. See 'person list' to find ids.
   --execute               Without this flag, adapters run in dry-run mode
                            and never submit a real request.
 
+Store selectors (shared by 'run --person' and all 'person' subcommands):
+  --store <path>          A local, passphrase-encrypted file store.
+                           Passphrase comes from OPTOUTOS_PASSPHRASE — never
+                           pass it as a flag (shell history / ps exposure).
+  --store-bws <secretId>  A Bitwarden Secrets Manager-backed store. Token
+                           comes from BWS_ACCESS_TOKEN (existing convention).
+
 Privacy note: this CLI never phones home, logs no PII, and only contacts
-the broker you explicitly target. See THREAT_MODEL.md and SECURITY.md.
+the broker you explicitly target. See THREAT_MODEL.md, SECURITY.md, and
+docs/PEOPLE_STORE.md.
 `.trim();
 
-async function loadProfile(path: string): Promise<PiiProfile> {
+async function loadProfileFromFile(path: string): Promise<PiiProfile> {
   const raw = await readFile(path, "utf-8");
   return PiiProfileSchema.parse(JSON.parse(raw));
+}
+
+/** Household-matching.ts uses the same shape; kept in sync deliberately. */
+function personToPiiProfile(person: PersonRecord): PiiProfile {
+  return {
+    firstName: person.firstName,
+    lastName: person.lastName,
+    middleName: person.middleName,
+    dateOfBirth: person.dateOfBirth,
+    emails: person.emails,
+    phones: person.phones,
+    addresses: person.addresses,
+    relatives: [],
+  };
+}
+
+function describeStore(store: StoreSelector): string {
+  return store.kind === "local-file" ? `local file (${store.path})` : `BWS secret (${store.secretId})`;
 }
 
 export async function main(argv: string[]): Promise<number> {
@@ -61,6 +98,60 @@ export async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
+  if (parsed.command === "person-add") {
+    try {
+      const store = resolveStore(parsed.store);
+      const created = await addPerson(store, parsed.fields);
+      console.log(`Added ${created.firstName} ${created.lastName} (id: ${created.id}) to ${describeStore(parsed.store)}`);
+      return 0;
+    } catch (err) {
+      console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      return 1;
+    }
+  }
+
+  if (parsed.command === "person-edit") {
+    try {
+      const store = resolveStore(parsed.store);
+      const updated = await editPerson(store, parsed.id, parsed.fields);
+      console.log(`Updated ${updated.firstName} ${updated.lastName} (id: ${updated.id})`);
+      return 0;
+    } catch (err) {
+      console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      return 1;
+    }
+  }
+
+  if (parsed.command === "person-list") {
+    try {
+      const store = resolveStore(parsed.store);
+      const people = await listPeople(store);
+      if (people.length === 0) {
+        console.log(`No people in ${describeStore(parsed.store)} yet.`);
+        return 0;
+      }
+      for (const p of people) {
+        console.log(`${p.id}  ${p.firstName} ${p.lastName}`);
+      }
+      return 0;
+    } catch (err) {
+      console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      return 1;
+    }
+  }
+
+  if (parsed.command === "person-link") {
+    try {
+      const store = resolveStore(parsed.store);
+      await linkPeople(store, parsed.personA, parsed.personB, parsed.relationshipType);
+      console.log(`Linked ${parsed.personA} <-> ${parsed.personB} as "${parsed.relationshipType}"`);
+      return 0;
+    } catch (err) {
+      console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      return 1;
+    }
+  }
+
   // parsed.command === "run"
   const adapter = getBrokerAdapter(parsed.broker);
   if (!adapter) {
@@ -71,11 +162,22 @@ export async function main(argv: string[]): Promise<number> {
 
   let profile: PiiProfile;
   try {
-    profile = await loadProfile(parsed.profilePath);
+    if (parsed.source.kind === "profile-file") {
+      profile = await loadProfileFromFile(parsed.source.path);
+    } else {
+      const source = parsed.source;
+      const store = resolveStore(source.store);
+      const household = await store.load();
+      const person = household.people.find((p) => p.id === source.personId);
+      if (!person) {
+        console.error(`Person not found: ${source.personId}`);
+        console.error(`Run 'optoutos person list --store ...' to see valid ids.`);
+        return 1;
+      }
+      profile = personToPiiProfile(person);
+    }
   } catch (err) {
-    console.error(
-      `Failed to load/validate profile at ${parsed.profilePath}: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    console.error(`Failed to load PII source: ${err instanceof Error ? err.message : String(err)}`);
     return 1;
   }
 

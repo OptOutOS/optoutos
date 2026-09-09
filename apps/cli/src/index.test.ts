@@ -51,7 +51,7 @@ describe("main (CLI command dispatch)", () => {
     const code = await main(["run", "--broker", "thatsthem", "--profile", "./does-not-exist.json"]);
 
     expect(code).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to load/validate profile"));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to load PII source"));
   });
 
   it("returns 1 and prints an error for 'run' with an invalid profile (fails PiiProfileSchema)", async () => {
@@ -62,7 +62,7 @@ describe("main (CLI command dispatch)", () => {
       const code = await main(["run", "--broker", "thatsthem", "--profile", profilePath]);
 
       expect(code).toBe(1);
-      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to load/validate profile"));
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to load PII source"));
     } finally {
       await unlink(profilePath).catch(() => {});
     }

@@ -37,6 +37,47 @@ Even with `--execute`, an adapter will still refuse (status
 challenge on the removal step — this project never attempts to bypass those.
 See `THREAT_MODEL.md` and `docs/BROKER_STATUS.md`.
 
+## Household store (multi-person, persistent, encrypted)
+
+Instead of a one-off `--profile` JSON file, you can manage a persistent,
+encrypted, multi-person household — including relationships between people
+(spouse/parent/child/sibling/other) — and run removals against anyone in it.
+See `docs/PEOPLE_STORE.md` for the full design.
+
+```
+# Add people
+node apps/cli/dist/cli.js person add --store ./household.enc.json \
+  --first John --last Smith --street "123 Main St" --city Seattle --state WA --zip 98101
+
+node apps/cli/dist/cli.js person add --store ./household.enc.json --first Jane --last Smith
+
+# List them (to get ids)
+node apps/cli/dist/cli.js person list --store ./household.enc.json
+
+# Link two people (used as a match-confidence signal — see PEOPLE_STORE.md)
+node apps/cli/dist/cli.js person link --store ./household.enc.json \
+  --a <johnId> --b <janeId> --type spouse
+
+# Edit a person
+node apps/cli/dist/cli.js person edit --store ./household.enc.json --id <personId> --email new@example.com
+
+# Run a removal sourced from the household store instead of --profile
+node apps/cli/dist/cli.js run --broker advancedbackgroundchecks \
+  --person <johnId> --store ./household.enc.json
+```
+
+**Passphrase**: the local encrypted store's passphrase is read from the
+`OPTOUTOS_PASSPHRASE` environment variable — never accepted as a CLI flag
+(would land in shell history and be visible to other processes via
+`ps`/Task Manager). There is no recovery mechanism if it's lost — a
+recoverable passphrase is a weaker passphrase; back up the file and
+passphrase separately and securely.
+
+**Bitwarden-backed alternative**: pass `--store-bws <secretId>` instead of
+`--store <path>` to use a Bitwarden Secrets Manager secret as the backing
+store (same `BWS_ACCESS_TOKEN` env var convention as the rest of the
+project). Bitwarden then handles encryption at rest and backup.
+
 ## Profile format
 
 `--profile` points to a local JSON file matching the `PiiProfile` schema in
