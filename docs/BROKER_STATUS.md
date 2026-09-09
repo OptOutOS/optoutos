@@ -148,3 +148,35 @@ order of expected leverage:
 4. Evaluate FlareSolverr specifically against Whitepages and USPhonebook
    (plain Cloudflare 403s, no CAPTCHA widget observed) as a targeted,
    policy-compliant unblock before writing them off as fully manual.
+
+## Round 3 — real search-result parsing implemented (2026-09-09)
+
+**First working end-to-end pipeline in the project.** Built a direct HTML
+parser for Advanced Background Checks (`parseAdvancedBackgroundChecksResults`
+in `advancedbackgroundchecks.ts`, using `cheerio`) that consumes
+FlareSolverr's raw HTTP response directly, since Playwright re-navigation to
+the `/find/name/` route proved unreliable even with cookie injection (see
+docs/FLARESOLVERR.md Round 2 notes).
+
+Built with real TDD: 5 tests against a real saved HTML fixture (an actual
+excerpt from a live FlareSolverr response, not fabricated) in
+`src/brokers/__fixtures__/`, watched them fail (function didn't exist) before
+implementing.
+
+**Verified live end-to-end:**
+- `search()` against the real site returned 20 genuine candidates with real
+  names, ages, cities, states, zips, and prior-address data.
+- Ran the full `runRemoval()` pipeline with a test profile matching one real
+  candidate (John N Smith, Port Orchard WA) — local scoring correctly scored
+  it 1.0 and the engine proceeded to `optOut()` only because of that
+  confirmed match.
+- `optOut()` correctly detected the *separate* reCAPTCHA gate on the opt-out
+  page (distinct from the search page's Cloudflare challenge) and failed
+  closed — confirming the two anti-bot layers on this broker are independent
+  and both handled correctly.
+
+**Not yet done:** Spokeo and USPhonebook still need equivalent
+result-parsing work. USPhonebook's name-search flow proved harder than
+expected — city field is disabled until an unidentified client-side
+interaction fires, and Enter-key submission didn't trigger a real search —
+needs a dedicated follow-up rather than being rushed.

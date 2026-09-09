@@ -1,7 +1,99 @@
-import type { Page, BrowserContext } from "playwright";
+import type { Page } from "playwright";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
 import type { PiiProfile } from "../pii.js";
-import { getFlareSolverrClientFromEnv, primeContextWithFlareSolverr } from "../flaresolverr.js";
+import { getFlareSolverrClientFromEnv } from "../flaresolverr.js";
+import * as cheerio from "cheerio";
+import type { SearchCandidate } from "./matching.js";
+
+/**
+ * Parses Advanced Background Checks' search-result HTML directly (via
+ * cheerio), rather than relying on Playwright to reach the live page.
+ *
+ * WHY: verified live 2026-09-09 that FlareSolverr's cookie-injection pattern
+ * (which works for the /opt-out route) does NOT reliably clear the
+ * /find/name/{term} route for a fresh Playwright context — the page still
+ * showed "Just a moment..." even after FlareSolverr solved that exact URL
+ * directly via its own API (confirmed: 320KB+ real results returned by
+ * FlareSolverr itself). So: parse FlareSolverr's raw HTML response directly,
+ * never attempt a second live Playwright navigation to this route.
+ *
+ * Card structure verified live 2026-09-09 (see
+ * src/brokers/__fixtures__/advancedbackgroundchecks-search-results.html, a
+ * real saved excerpt, not fabricated):
+ *   Each result: <a class="group" href="/find/person/{slug}">
+ *     <h2>{Name}<span>Age {N}</span></h2></a>
+ *   <p class="text-sm mt-1"><a href="/people/{state}/{city}">{City}, {State}</a>
+ *     <a href="/people/zip/{zip}">{zip}</a></p>
+ *   Optional "Used to live:" section with prior address links.
+ *
+ * The page also lists many OTHER unrelated people (related/associated
+ * records) alongside genuine name matches — candidates are returned as-is
+ * for every person block found; the privacy-minimization engine
+ * (scoreCandidate/runRemoval) is responsible for filtering to a real match,
+ * NOT this parser. This parser's only job is faithful extraction of what
+ * the broker displayed, never guessing or filtering by "relevance".
+ */
+export function parseAdvancedBackgroundChecksResults(html: string): SearchCandidate[] {
+  const $ = cheerio.load(html);
+  const candidates: SearchCandidate[] = [];
+
+  $('a.group[href^="/find/person/"]').each((_, el) => {
+    const $link = $(el);
+    const href = $link.attr("href");
+    if (!href) return;
+
+    const $h2 = $link.find("h2").first();
+    const ageText = $h2.find("span").first().text().trim();
+    const ageMatch = ageText.match(/Age\s*(\d+)/i);
+    const observedAgeRange = ageMatch ? ageMatch[1] : undefined;
+
+    // Name is the h2's text with the age span's text removed.
+    const fullH2Text = $h2.text().trim();
+    const observedName = ageMatch ? fullH2Text.replace(ageText, "").trim() : fullH2Text;
+
+    // The current-location paragraph is the next sibling <p> in the same
+    // wrapping block as the name link.
+    const $container = $link.closest("div");
+    const $locationP = $container.find("p.text-sm").first();
+    const locationLinks = $locationP.find("a");
+    let observedCity: string | undefined;
+    let observedState: string | undefined;
+    let observedZip: string | undefined;
+
+    if (locationLinks.length > 0) {
+      const cityStateText = $(locationLinks[0]).text().trim(); // e.g. "Port Orchard, WA" (with comment nodes stripped by cheerio)
+      const cityStateMatch = cityStateText.match(/^(.+?),\s*([A-Z]{2})$/);
+      if (cityStateMatch) {
+        observedCity = cityStateMatch[1].trim();
+        observedState = cityStateMatch[2].trim();
+      }
+      if (locationLinks.length > 1) {
+        observedZip = $(locationLinks[1]).text().trim();
+      }
+    }
+
+    const extra: Record<string, string> = {};
+    const usedToLiveLabel = $container.find("span:contains('Used to live')").first();
+    if (usedToLiveLabel.length) {
+      const usedToLiveText = usedToLiveLabel.parent().text().replace("Used to live:", "").trim();
+      if (usedToLiveText) {
+        extra.usedToLive = usedToLiveText;
+      }
+    }
+
+    candidates.push({
+      candidateId: href,
+      observedName: observedName || undefined,
+      observedCity,
+      observedState,
+      observedZip,
+      observedAgeRange,
+      extra: Object.keys(extra).length > 0 ? extra : undefined,
+    });
+  });
+
+  return candidates;
+}
 
 /**
  * AdvancedBackgroundChecks opt-out adapter.
@@ -57,56 +149,40 @@ export class AdvancedBackgroundChecksAdapter implements BrokerAdapter {
 
   /**
    * Search the broker's public name-search route without submitting opt-out
-   * data. The live route was previously blocked by Cloudflare's passive
-   * "Just a moment..." challenge before any results rendered.
+   * data.
    *
-   * FLARESOLVERR INTEGRATION (verified 2026-09-09): a self-hosted
-   * FlareSolverr instance successfully solves this specific challenge —
-   * confirmed by fetching a real 93KB opt-out-page response through it and,
-   * separately, confirmed that injecting its cookies into a fresh Playwright
-   * BrowserContext lets a normal Playwright page.goto() reach the real page.
-   * See docs/FLARESOLVERR.md. If FLARESOLVERR_URL is set, this method primes
-   * the page's BrowserContext with FlareSolverr before navigating. If it is
-   * not set, or FlareSolverr itself fails/reports a still-challenged page,
-   * this method fails closed to [] exactly as before — FlareSolverr is a
-   * strictly optional enhancement, never a requirement to run this adapter.
+   * IMPORTANT (verified 2026-09-09, see parseAdvancedBackgroundChecksResults
+   * docstring above): this route's Cloudflare challenge does NOT reliably
+   * clear via Playwright + injected FlareSolverr cookies, even though
+   * FlareSolverr itself solves the same URL correctly via its own API. So
+   * this method calls FlareSolverr directly for the HTML and parses it with
+   * cheerio — it does NOT navigate `page` to this URL at all. `page` is
+   * still accepted (required by the BrokerAdapter interface) but unused
+   * here; optOut() still uses `page` normally for the /opt-out route, which
+   * IS reliably reachable via the Playwright+cookie-injection pattern.
    *
-   * The actual search-RESULT-card markup on the far side of the challenge has
-   * still not been live-verified in this codebase — this integration proves
-   * the challenge itself is bypassable, not that result parsing is complete.
-   * Until result selectors are verified, this still returns [] even when the
-   * challenge is successfully cleared, rather than guessing candidate fields.
+   * If FLARESOLVERR_URL is not configured, or FlareSolverr fails/still
+   * reports a challenge page, this fails closed to [] — never guesses.
    */
-  async search(page: Page, minimalProfile: Partial<PiiProfile>): Promise<import("./matching.js").SearchCandidate[]> {
+  async search(_page: Page, minimalProfile: Partial<PiiProfile>): Promise<SearchCandidate[]> {
     const firstName = minimalProfile.firstName?.trim();
     const lastName = minimalProfile.lastName?.trim();
     if (!firstName || !lastName) return [];
 
+    const flareSolverr = getFlareSolverrClientFromEnv();
+    if (!flareSolverr) return [];
+
     const term = `${firstName}-${lastName}`.replace(/\s+/g, "-");
     const targetUrl = `${this.searchUrl}find/name/${encodeURIComponent(term)}`;
 
-    const flareSolverr = getFlareSolverrClientFromEnv();
-    if (flareSolverr) {
-      try {
-        await primeContextWithFlareSolverr(page.context() as BrowserContext, flareSolverr, targetUrl);
-      } catch {
-        // FlareSolverr unavailable or couldn't solve it — fall through to the
-        // plain-Playwright attempt below, which will fail closed as before.
-      }
-    }
-
-    await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
-
-    const bodyText = await page.locator("body").innerText().catch(() => "");
-    const title = await page.title().catch(() => "");
-    if (/just a moment|challenge|cloudflare/i.test(`${title}\n${bodyText}`)) {
+    try {
+      const solution = await flareSolverr.solve(targetUrl);
+      return parseAdvancedBackgroundChecksResults(solution.response);
+    } catch {
+      // FlareSolverr unavailable, timed out, or still challenged — fail
+      // closed rather than guess or retry indefinitely.
       return [];
     }
-
-    // Challenge cleared (if FlareSolverr was used) but result-card markup has
-    // not been live-verified yet: do not guess selectors or manufacture
-    // candidates from an unverified page structure. See docstring above.
-    return [];
   }
 
   async optOut(page: Page, profile: Partial<PiiProfile>): Promise<RemovalResult> {
