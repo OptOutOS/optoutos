@@ -37,6 +37,18 @@ explicitly does not try to solve. Written before code, per project design princi
 - **Legal enforcement.** This tool automates the *submission* of removal requests; it
   does not pursue legal remedies if a broker ignores them.
 
+## Legal / Terms-of-Service risk (accepted, 2026-09-09)
+
+Automating interaction with a broker's website (even solely for the purpose of
+submitting a legitimate opt-out/removal request) likely violates that broker's
+Terms of Service in the general case — most ToS prohibit automated access
+regardless of intent. This project accepts that risk deliberately: the
+alternative (manual-only submission) does not scale to 12+ brokers repeated
+on a recurring basis, and the *purpose* of every automated interaction here
+is exclusively the user's own opt-out, never scraping broker data for reuse.
+This is a conscious tradeoff, not an oversight — flagged here so it is
+visible to contributors and self-hosters rather than left implicit.
+
 ## Trust boundaries by deployment mode
 
 - **Local-first (default):** trust boundary is the user's own machine. No PII crosses
