@@ -124,7 +124,7 @@ export function scoreCandidate(
     if (emailMatch) matchedFields.push("email");
   }
 
-  if (candidate.observedRelatives?.length) {
+  if (candidate.observedRelatives?.length && (fullProfile.relatives ?? []).length > 0) {
     const relativeMatch = candidate.observedRelatives.some((r) =>
       (fullProfile.relatives ?? []).some((fr) => normalize(fr) === normalize(r)),
     );

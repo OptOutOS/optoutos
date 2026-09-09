@@ -105,6 +105,34 @@ describe("scoreCandidate", () => {
 
     expect(result.matchedFields).toContain("phone");
   });
+
+  it("does not penalize a candidate merely for having observedRelatives when profile.relatives is empty (bug found 2026-09-09)", () => {
+    const profileWithNoTrackedRelatives: PiiProfile = {
+      ...fullProfile,
+      relatives: [],
+    };
+    const candidateWithRelatives: SearchCandidate = {
+      candidateId: "c7",
+      observedName: "John Smith",
+      observedCity: "Seattle",
+      observedState: "WA",
+      observedRelatives: ["Someone Unrelated"],
+    };
+    const candidateWithoutRelatives: SearchCandidate = {
+      candidateId: "c8",
+      observedName: "John Smith",
+      observedCity: "Seattle",
+      observedState: "WA",
+    };
+
+    const withRelatives = scoreCandidate(candidateWithRelatives, profileWithNoTrackedRelatives);
+    const withoutRelatives = scoreCandidate(candidateWithoutRelatives, profileWithNoTrackedRelatives);
+
+    // Merely having an observedRelatives list the profile can't confirm or
+    // deny should be NEUTRAL, not a penalty — the broker showing a relative
+    // we don't have on file is not evidence AGAINST a match.
+    expect(withRelatives.score).toBeCloseTo(withoutRelatives.score, 5);
+  });
 });
 
 describe("pickPiiFields", () => {
