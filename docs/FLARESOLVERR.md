@@ -4,10 +4,11 @@
 proxy that drives a real (undetected) Chrome instance to solve Cloudflare's
 **passive** computational/JS "checking your browser" challenges. It does
 **not** solve interactive CAPTCHAs (Turnstile, reCAPTCHA, hCaptcha) — its own
-README states this explicitly. Using it stays within this project's policy
-("anti-bot if easy, otherwise move on" / no CAPTCHA-solving), since it is
-outlasting a passive challenge the way a real browser naturally would, not
-defeating a human-verification widget.
+README states this explicitly. Interactive challenges are instead handled by
+a separate, dedicated real-browser Turnstile/CAPTCHA solver integration (see
+`packages/core/src/turnstile-solver.ts` and THREAT_MODEL.md's "Anti-bot /
+CAPTCHA policy" for the revised, in-scope policy as of 2026-09-09) — the two
+tools solve genuinely different obstacle classes and are not interchangeable.
 
 ## Live evaluation results (2026-09-09)
 
