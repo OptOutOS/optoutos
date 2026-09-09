@@ -24,6 +24,32 @@ describe("PersonRecordSchema", () => {
     expect(parsed.addresses).toEqual([]);
   });
 
+  it("defaults brokerRunHistory to an empty object", () => {
+    const parsed = PersonRecordSchema.parse({
+      id: "11111111-1111-4111-8111-111111111111",
+      firstName: "John",
+      lastName: "Smith",
+    });
+
+    expect(parsed.brokerRunHistory).toEqual({});
+  });
+
+  it("accepts a person with an existing brokerRunHistory rollup", () => {
+    const result = PersonRecordSchema.safeParse({
+      id: "11111111-1111-4111-8111-111111111111",
+      firstName: "John",
+      lastName: "Smith",
+      brokerRunHistory: {
+        advancedbackgroundchecks: { lastRunAt: "2026-09-09T00:00:00.000Z", lastStatus: "no_match_found" },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.brokerRunHistory.advancedbackgroundchecks.lastStatus).toBe("no_match_found");
+    }
+  });
+
   it("rejects a person missing firstName", () => {
     const result = PersonRecordSchema.safeParse({
       id: "11111111-1111-4111-8111-111111111111",

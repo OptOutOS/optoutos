@@ -31,6 +31,13 @@ export type ParsedArgs =
       personA: string;
       personB: string;
       relationshipType: RelationshipType;
+    }
+  | {
+      command: "schedule-run";
+      store: StoreSelector;
+      /** undefined means: run every registered broker. */
+      brokers: string[] | undefined;
+      execute: boolean;
     };
 
 /**
@@ -68,6 +75,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return parsePerson(rest);
   }
 
+  if (command === "schedule-run") {
+    return parseScheduleRun(rest);
+  }
+
   return { command: "help" };
 }
 
@@ -98,6 +109,37 @@ function parseRun(rest: string[]): ParsedArgs {
   throw new Error(
     "Missing PII source: pass either --profile <path-to-profile.json> or --person <id> --store <path>.",
   );
+}
+
+function parseScheduleRun(rest: string[]): ParsedArgs {
+  const flags = parseFlags(rest);
+  const store = parseStoreSelector(flags);
+  const execute = flags.has("--execute");
+  const brokerValues = collectRepeatedFlag(rest, "--broker");
+  const brokers = brokerValues.length > 0 ? brokerValues : undefined;
+
+  return { command: "schedule-run", store, brokers, execute };
+}
+
+/**
+ * Collects every value for a repeatable flag (e.g. `--broker a --broker b`)
+ * directly from the raw argv slice, since parseFlags()'s Map only keeps the
+ * LAST value per flag name (fine for every other single-valued flag in this
+ * CLI, but wrong for --broker here, which the user should be able to repeat
+ * to restrict schedule-run to specific brokers).
+ */
+function collectRepeatedFlag(args: string[], flag: string): string[] {
+  const values: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === flag) {
+      const value = args[i + 1];
+      if (value && !value.startsWith("--")) {
+        values.push(value);
+        i++;
+      }
+    }
+  }
+  return values;
 }
 
 function parsePerson(rest: string[]): ParsedArgs {

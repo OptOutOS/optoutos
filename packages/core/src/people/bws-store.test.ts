@@ -14,6 +14,7 @@ describe("BitwardenSecretsPeopleStore", () => {
     emails: [],
     phones: [],
     addresses: [],
+    brokerRunHistory: {},
   };
 
   beforeEach(() => {

@@ -25,6 +25,7 @@ describe("LocalEncryptedFileStore", () => {
     emails: [],
     phones: [],
     addresses: [],
+    brokerRunHistory: {},
   };
 
   it("returns an empty household when the file does not exist yet", async () => {

@@ -17,6 +17,7 @@ export async function addPerson(
     addresses: fields.addresses?.map((a) => ({ ...a, country: "US" })) ?? [],
     dateOfBirth: fields.dateOfBirth,
     notes: fields.notes,
+    brokerRunHistory: {},
   };
 
   await store.save({ ...household, people: [...household.people, newPerson] });

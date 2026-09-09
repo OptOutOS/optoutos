@@ -106,6 +106,21 @@ exactly as before — never guesses or fabricates a submission. Only
 real-browser, locally-run solvers are ever used — never a third-party paid
 CAPTCHA-solving API.
 
+## Recurring re-checks (scheduling)
+
+Data brokers re-populate listings over time — a one-time opt-out is not
+permanent. `schedule-run` re-checks every (person, broker) pair whose
+re-check interval has elapsed, and skips anything checked recently:
+
+```
+node apps/cli/dist/cli.js schedule-run --store ./household.enc.json
+```
+
+Same dry-run-by-default / `--execute` gate as `run`. Writes a non-PII JSONL
+audit log next to the store. See `docs/SCHEDULING.md` for the recommended
+cadence (cited from privacyguides.org), how "due" is tracked, and how to
+wire this up as a cron/Task Scheduler job.
+
 ## Exit codes
 
 - `0` — command completed (including a clean "no match found" result).

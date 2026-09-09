@@ -11,6 +11,7 @@ describe("scoreCandidateWithHousehold", () => {
     emails: [],
     phones: [],
     addresses: [{ street: "123 Main St", city: "Seattle", state: "WA", zip: "98101", country: "US" }],
+    brokerRunHistory: {},
   };
   const jane: PersonRecord = {
     id: "22222222-2222-4222-8222-222222222222",
@@ -19,6 +20,7 @@ describe("scoreCandidateWithHousehold", () => {
     emails: [],
     phones: [],
     addresses: [],
+    brokerRunHistory: {},
   };
   const household: Household = {
     people: [john, jane],
@@ -57,6 +59,7 @@ describe("scoreCandidateWithHousehold", () => {
       emails: [],
       phones: [],
       addresses: [],
+      brokerRunHistory: {},
     };
     const householdWithStranger: Household = {
       people: [john, jane, stranger],

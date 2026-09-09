@@ -39,6 +39,25 @@ export const PersonRecordSchema = z.object({
    * never sent to any broker, local reference only.
    */
   notes: z.string().optional(),
+  /**
+   * Compact per-broker rollup of the last run against this broker, keyed by
+   * brokerId. This is the scheduler's source of truth for "is a re-check
+   * due" (see scheduling/scheduler.ts) — a full audit trail of every run
+   * lives separately in the non-PII JSONL run log
+   * (see logging/run-logger.ts), which this deliberately does NOT
+   * duplicate. Only the single most recent outcome per broker is kept here,
+   * since that's all "is this due" needs, and it keeps the encrypted store
+   * from growing unboundedly with history on every scheduled run.
+   */
+  brokerRunHistory: z
+    .record(
+      z.string(),
+      z.object({
+        lastRunAt: z.string(), // ISO 8601
+        lastStatus: z.string(),
+      }),
+    )
+    .default({}),
 });
 
 export type PersonRecord = z.infer<typeof PersonRecordSchema>;

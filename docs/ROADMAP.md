@@ -22,7 +22,9 @@ repeatably. Concretely:
 - [ ] Email-based removal path built (currently: not started) — demoted to
       last resort per the revised anti-bot policy (see below), since a
       real-browser solver now covers most Cloudflare/Turnstile blocks.
-- [ ] Scheduled/recurring runs (currently: none — CLI is invoke-once).
+- [x] Scheduled/recurring runs — ✅ done (2026-09-09). `schedule-run` CLI
+      command, per-broker cadence (default 100 days, cited from
+      privacyguides.org), non-PII JSONL audit log. See docs/SCHEDULING.md.
 - [ ] A packaged install path that isn't "clone the repo and run npm build"
       (currently: developer-only).
 
@@ -75,8 +77,10 @@ user would judge this tool on don't exist yet for most brokers.
    solver to clear an opt-out-page challenge, or the candidateId-threading
    work above for a broker whose opt-out doesn't have an anti-bot gate at
    all.
-5. **Scheduling** — even a simple documented cron/Task-Scheduler recipe
-   using the existing CLI would meet this need without new code.
+5. **Scheduling** — ✅ done (2026-09-09). `schedule-run` CLI command,
+   per-broker cadence tracked via a compact rollup on PersonRecord, a
+   separate non-PII JSONL audit log, and docs/SCHEDULING.md covering
+   cron/Task Scheduler setup.
 6. **Email-based removal path** — last-resort fallback for brokers where no
    technical bypass path exists at all (e.g. IP-banned, or account-gated
    like BeenVerified where creating a third-party account is out of scope).

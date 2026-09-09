@@ -296,3 +296,57 @@ describe("parseArgs — unknown person subcommand", () => {
     expect(result).toEqual({ command: "help" });
   });
 });
+
+describe("parseArgs — schedule-run", () => {
+  it("parses 'schedule-run --store <path>' with no --broker (means: all brokers)", () => {
+    const result = parseArgs(["schedule-run", "--store", "./h.json"]);
+
+    expect(result).toEqual({
+      command: "schedule-run",
+      store: { kind: "local-file", path: "./h.json" },
+      brokers: undefined,
+      execute: false,
+    });
+  });
+
+  it("parses --broker to restrict to a single broker (repeatable)", () => {
+    const result = parseArgs([
+      "schedule-run",
+      "--store",
+      "./h.json",
+      "--broker",
+      "advancedbackgroundchecks",
+      "--broker",
+      "spokeo",
+    ]);
+
+    expect(result.command).toBe("schedule-run");
+    if (result.command === "schedule-run") {
+      expect(result.brokers).toEqual(["advancedbackgroundchecks", "spokeo"]);
+    }
+  });
+
+  it("sets execute:true when --execute is passed", () => {
+    const result = parseArgs(["schedule-run", "--store", "./h.json", "--execute"]);
+
+    expect(result.command).toBe("schedule-run");
+    if (result.command === "schedule-run") {
+      expect(result.execute).toBe(true);
+    }
+  });
+
+  it("supports --store-bws just like other commands", () => {
+    const result = parseArgs(["schedule-run", "--store-bws", "some-secret-id"]);
+
+    expect(result).toEqual({
+      command: "schedule-run",
+      store: { kind: "bws", secretId: "some-secret-id" },
+      brokers: undefined,
+      execute: false,
+    });
+  });
+
+  it("throws if neither --store nor --store-bws is given", () => {
+    expect(() => parseArgs(["schedule-run"])).toThrow(/--store/);
+  });
+});
