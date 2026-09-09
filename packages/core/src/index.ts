@@ -1,5 +1,7 @@
 export * from "./pii.js";
 export * from "./brokers/types.js";
+export * from "./brokers/matching.js";
+export * from "./brokers/engine.js";
 export * from "./brokers/thatsthem.js";
 export * from "./brokers/advancedbackgroundchecks.js";
 export * from "./brokers/beenverified.js";

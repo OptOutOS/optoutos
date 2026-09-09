@@ -1,6 +1,7 @@
 import type { Page } from "playwright";
 import type { PiiProfile } from "../pii.js";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
+import type { SearchCandidate } from "./matching.js";
 
 /**
  * Spokeo opt-out adapter.
@@ -30,9 +31,9 @@ export class SpokeoAdapter implements BrokerAdapter {
   readonly optOutUrl = "https://spokeo.com/optout";
   readonly requiredFields = ["emails"] as const;
 
-  async search(page: Page, _profile: Partial<PiiProfile>): Promise<boolean> {
+  async search(page: Page, _profile: Partial<PiiProfile>): Promise<SearchCandidate[]> {
     await page.goto(this.searchUrl, { waitUntil: "domcontentloaded" });
-    return false;
+    return [];
   }
 
   async optOut(page: Page, profile: Partial<PiiProfile>): Promise<RemovalResult> {

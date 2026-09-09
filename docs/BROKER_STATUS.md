@@ -6,6 +6,45 @@ observed against the real site (not just type-checked). Method priority is
 `api > form > email` per project policy — none of the 12 were found to have
 a public opt-out API.
 
+## Privacy-minimization gate (added 2026-09-09)
+
+Per explicit user requirement: **a removal request must never be sent unless
+the user's PII was first confirmed present via a minimal-PII search,
+compared locally against the fuller profile.** This is now enforced as a
+mandatory chokepoint, `runRemoval()` in `packages/core/src/brokers/engine.ts`
+— not left to per-adapter discipline:
+
+1. `adapter.search()` is called with only `searchFields` (a small subset of
+   PII — e.g. name + city, never full address/phone/email up front).
+2. Every candidate the broker's own search publicly returns is scored
+   **locally** (`scoreCandidate()` in `matching.ts`) against the full local
+   profile. The full profile is never sent to the broker for this step.
+3. Only if the best-scoring candidate clears `MATCH_CONFIDENCE_THRESHOLD`
+   (0.6) does `adapter.optOut()` ever get called, and only for that specific
+   confirmed candidate.
+4. If no candidate matches, or an adapter has no automatable `search()` at
+   all (e.g. login-gated brokers), the result is `no_match_found` or
+   `requires_manual_verification` respectively — it never falls back to
+   submitting opt-out blind.
+
+Verified live: scoring correctly distinguishes a strong multi-field match
+(score 1.00, proceeds) from a same-last-name/wrong-city false-positive risk
+(score 0.46, blocked below the 0.6 threshold) and a full non-match (score
+0.00, blocked). Verified via `runRemoval()` against the live That'sThem
+adapter, which has no `search()` implemented yet — confirmed it short-circuits
+to `requires_manual_verification` before ever calling `optOut()`, rather than
+silently skipping the gate.
+
+**Honest current gap:** none of the 11 non-thatsthem adapters implement a
+real `search()` returning actual `SearchCandidate[]` yet — most never got
+past anti-bot walls far enough to verify real search-result selectors (see
+per-broker notes below). Under the new gate, every adapter therefore
+currently resolves to `requires_manual_verification` via the
+"no search capability" path, not via a confirmed-match path. This is the
+correct, safe default (no adapter can accidentally skip the gate), but it
+means the next real engineering work is implementing verified `search()`
+methods per broker, not just opt-out forms.
+
 | Broker | Method | Live Result | Notes |
 |---|---|---|---|
 | ClustrMaps | — | Not testable | `clustrmaps.com` is DNS-sinkholed to `0.0.0.0` by this network's UDM Pro (confirmed against 1.1.1.1 too — network-wide, not a local override). Deprioritized as spike target for this reason. |

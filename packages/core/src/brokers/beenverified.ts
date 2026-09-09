@@ -1,6 +1,7 @@
 import type { Page } from "playwright";
 import type { PiiProfile } from "../pii.js";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
+import type { SearchCandidate } from "./matching.js";
 
 /**
  * BeenVerified opt-out adapter.
@@ -36,17 +37,17 @@ export class BeenVerifiedAdapter implements BrokerAdapter {
   readonly optOutUrl = "https://beenverified.com/app/optout/address-search";
   readonly requiredFields = ["firstName", "lastName", "addresses"] as const;
 
-  async search(page: Page, profile: Partial<PiiProfile>): Promise<boolean> {
+  async search(page: Page, profile: Partial<PiiProfile>): Promise<SearchCandidate[]> {
     const timestamp = new Date().toISOString();
-    if (!profile.firstName || !profile.lastName || !profile.addresses?.[0]) return false;
+    if (!profile.firstName || !profile.lastName || !profile.addresses?.[0]) return [];
 
     await page.goto(this.searchUrl, { waitUntil: "domcontentloaded" });
-    if (await this.hasAntiBotMarker(page)) return false;
+    if (await this.hasAntiBotMarker(page)) return [];
 
     // The live route renders a client application, but no search controls were
     // safely verifiable. Do not guess selectors or submit identity data.
     void timestamp;
-    return false;
+    return [];
   }
 
   async optOut(page: Page, profile: Partial<PiiProfile>): Promise<RemovalResult> {
