@@ -1,7 +1,23 @@
 import type { Page } from "playwright";
 import type { PiiField, PiiProfile } from "../pii.js";
 
-export type RemovalMethod = "form" | "email" | "api";
+export type RemovalMethod = "api" | "form" | "email";
+
+/**
+ * Method preference order for a given broker, evaluated top to bottom.
+ * Per project decision: prefer API (fastest, cleanest, no anti-bot fight)
+ * > web form (may require anti-bot handling, e.g. Patchright) > email
+ * (GDPR/CCPA-style formal request, works even against Turnstile-protected
+ * sites since no page load is required, but is slower/less confirmable).
+ *
+ * If a broker's preferred method hits non-trivial anti-bot friction (e.g. an
+ * interactive CAPTCHA/Turnstile challenge, not just a passive JS check), the
+ * adapter should fail with status "requires_manual_verification" rather than
+ * attempt to solve/bypass the challenge — see THREAT_MODEL.md and
+ * ADAPTER_GUIDE.md "Anti-bot policy". Move on to the next method or broker
+ * rather than sinking effort into defeating an active bot-detection widget.
+ */
+export const METHOD_PRIORITY: readonly RemovalMethod[] = ["api", "form", "email"];
 
 export type RemovalStatus =
   | "submitted"
