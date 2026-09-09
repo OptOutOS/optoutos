@@ -315,3 +315,58 @@ candidate's `candidateId` (the profile URL path) from `search()` into
 silently left unexplained.
 
 83 → 90 core tests. Lint/typecheck/build clean.
+
+## Round 7 — real USPhonebook search-result parsing, and a stale finding corrected (2026-09-09)
+
+**USPhonebook now has real, live-verified search()** — the third broker
+with working search. This also **corrects a wrong earlier conclusion**: the
+adapter's docstring previously said the Name-tab flow was genuinely broken
+("city field disabled until an unidentified interaction; Enter key doesn't
+submit"), and search() failed closed to `[]` unconditionally as a result.
+Re-verified live, that conclusion was wrong:
+
+- `www.usphonebook.com` (not the bare `usphonebook.com` host, which does
+  return a real HTTP 403) loads fine.
+- The Name tab **is** a working client-side toggle. A genuine Playwright
+  `.click()` times out on it — but only because the tab button renders
+  outside the headless viewport (a real layout/CSS quirk), not because the
+  control itself is broken. Dispatching the click via `page.evaluate()`
+  works correctly and enables the previously-"disabled" city field.
+- Pressing Enter in the now-enabled name field navigates to a genuine
+  `/{first}-{last}` results page — but only when the initial page load used
+  `waitUntil: "networkidle"`. With `domcontentloaded`, the same sequence
+  silently falls through to a dead `/search` route instead, because the
+  page's autocomplete/submit JS isn't fully attached yet. This was caught
+  by a real failed live-verification run (0 candidates on first live try,
+  despite fixture-based unit tests passing) — re-run with more careful
+  timing found the actual cause instead of accepting a false negative.
+  Raw `form.submit()` also does not work (hits the same dead `/search`
+  route); only the real Enter-key path is correct.
+
+Card structure (verified against a real fixture, not guessed):
+`<div class="success-wrapper-block" itemscope itemtype="https://schema.org/Person"
+itemid="https://www.usphonebook.com/{slug}/{id}">` with schema.org Person
+microdata throughout — `itemprop="name"`, `itemprop="address"` (current +
+prior), and `itemprop="relatedTo"` wrapping each relative's own nested
+Person microdata (no self-inclusion risk the way Spokeo's flat sibling-`<a>`
+markup had, since relatives are structurally distinct nodes here).
+`parseUsPhonebookResults()` (cheerio, 5 TDD tests) extracts all of this.
+
+Live end-to-end verified through the real `UsPhonebookAdapter.search()`
+class (not just the standalone parser), run twice for consistency given the
+timing-sensitive fix: 10 real candidates both times, correct cities/states,
+zero self-referential relatives.
+
+**Not yet done:** `optOut()` is unchanged — still fails closed on the
+verified reCAPTCHA gate. As with Spokeo, threading a matched candidate's
+profile URL from `search()` into `optOut()` would need the same
+not-yet-designed `runRemoval()` engine change.
+
+90 → 95 core tests. Lint/typecheck/build clean on both packages
+(140 tests total: 95 core + 45 CLI).
+
+**Broker coverage after this round: 3 of 12 brokers have real, live-verified
+search** (advancedbackgroundchecks, spokeo, usphonebook) — the full set of
+brokers previously known to be FlareSolverr/browser-reachable. The
+remaining 9 are IP-banned, account-gated, DNS-dead, or genuinely
+anti-bot-blocked at a level not yet unlocked (see Rounds 4-6 above).
