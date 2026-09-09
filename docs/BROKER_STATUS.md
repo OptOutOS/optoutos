@@ -221,3 +221,48 @@ specifically against That'sThem's real opt-out page is currently blocked by
 this new 403, not by the solver. Re-check when That'sThem's anti-bot posture
 stabilizes, or pursue a different broker's Turnstile challenge as the live
 proof target instead.
+
+## Round 5 — live re-survey of the remaining blocked brokers (2026-09-09)
+
+Re-checked all currently-blocked adapters live (not from memory/docs) after
+the Turnstile solver landed, to find the next real integration target
+instead of guessing:
+
+- **BeenVerified — new blocker class found, not just anti-bot.** The
+  documented `/app/optout/search` route now redirects straight to
+  `beenverified.com/login` ("Join today / Sign In") before any opt-out form
+  is reachable. That login page does carry a real, live Cloudflare Turnstile
+  widget (sitekey `0x4AAAAAAANy10csBBDGj3lU`, confirmed via `data-sitekey`),
+  so the *solver* would work on it — but the actual obstacle is that
+  BeenVerified now appears to require an authenticated account before their
+  opt-out flow is reachable at all. Creating/managing a third-party account
+  on the user's behalf is out of scope for this project (no credential
+  vending beyond the user's own configured PII/BWS sources) — this is
+  **not** a Turnstile-solver problem and needs a separate policy decision,
+  not code, before further work here. A second candidate URL from public
+  opt-out guides, `beenverified.com/svc/optout`, was also tried directly via
+  FlareSolverr raw-fetch: it serves a much harder Cloudflare JS challenge
+  that did not clear even at a 130s timeout (FlareSolverr's own log:
+  `Challenge detected. Title found: Just a moment...` → `Error solving the
+  challenge. Timeout after 130.0 seconds.`), so that route is currently a
+  dead end via both approaches tried.
+- **Whitepages — status re-confirmed, not resolved.** The bare homepage
+  `whitepages.com/` now returns a normal 200 (this differs from an earlier
+  "IP banned" note and could look like progress at a glance), but the actual
+  *functional* search route (`whitepages.com/name/{name}`) still returns
+  Cloudflare's interstitial block page ("Sorry, you have been blocked... You
+  are unable to access whitepages.com") with no Turnstile/CAPTCHA widget at
+  all — this is a network/IP-reputation-level block that a Turnstile solver
+  cannot address. No change to this broker's real status: still blocked,
+  root cause still IP-level rather than anti-bot-challenge-level.
+
+**Conclusion of this survey:** of the adapters not yet using the solver
+(CheckPeople, Whitepages, Intelius, Radaris, InfoTracer, PublicDataUSA),
+none currently present a "clean" interactive-Turnstile-only blocker the way
+That'sThem did when its adapter was written — they're either IP-banned
+(Whitepages, CheckPeople) or now account-gated (BeenVerified), which the
+solver doesn't help with. That'sThem itself is the correct integration to
+keep re-verifying once its current CloudFront 403 clears, since it's the
+one broker confirmed (this session) to have a real, code-level Turnstile
+integration point. No further broker-status changes made this round beyond
+documenting these live findings.
