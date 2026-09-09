@@ -49,6 +49,46 @@ is exclusively the user's own opt-out, never scraping broker data for reuse.
 This is a conscious tradeoff, not an oversight — flagged here so it is
 visible to contributors and self-hosters rather than left implicit.
 
+## Anti-bot / CAPTCHA policy (revised 2026-09-09)
+
+**Prior policy (2026-09-09, superseded same day):** never attempt to solve
+or bypass an active CAPTCHA/Turnstile/reCAPTCHA challenge under any
+circumstances; always fail closed to `requires_manual_verification`.
+
+**Current policy:** bypass anti-bot challenges (including interactive
+CAPTCHA/Turnstile/reCAPTCHA) **when a real, working solver is available**,
+using a real-browser-based solver (not a third-party paid CAPTCHA-farm API —
+that would reintroduce exactly the "trust a third party with your identity/
+traffic" problem this project exists to avoid). **Email-based removal is now
+the last resort**, used only when no broker-specific technical path (API,
+form with or without anti-bot solving) is viable at all.
+
+Rationale for the reversal: the project's own live broker survey found 7 of
+12 target brokers blocked specifically by Cloudflare/Turnstile-family
+anti-bot on their web forms — the single largest category of blocker by far.
+A hard no-bypass line meant most of the target broker list was permanently
+capped at `requires_manual_verification` regardless of how much adapter
+engineering went into search/scoring. The user made the explicit
+determination that automating a broker's own publicly-offered opt-out
+mechanism — including clearing whatever anti-bot gate stands in front of
+it — is within scope for a tool whose sole purpose is exercising a data
+subject's own opt-out right, as distinct from bulk/malicious scraping.
+
+**Still a hard line, unchanged:** no third-party paid CAPTCHA-solving
+service (2Captcha, CapSolver, Scrappey, etc.) — those require sending the
+challenge (and often site/traffic metadata) to an external company, which
+is a real trust boundary this project does not cross. Only real-browser,
+locally-run solvers (e.g. a self-hosted [EzSolver](https://github.com/ismoiloffS/EzSolver)-
+or [Theyka/Turnstile-Solver](https://github.com/Theyka/Turnstile-Solver)-style
+service, following the same self-hosted-HTTP-service pattern already used
+for FlareSolverr) are in scope.
+
+**Still a hard line, unchanged:** if no reliable solver exists for a given
+challenge type at all (e.g. an anti-bot vendor this project has no working
+solver for), the adapter must fail closed to `requires_manual_verification`
+— never guess, never fabricate a submission, never retry indefinitely
+against a challenge it cannot actually clear.
+
 ## Trust boundaries by deployment mode
 
 - **Local-first (default):** trust boundary is the user's own machine. No PII crosses

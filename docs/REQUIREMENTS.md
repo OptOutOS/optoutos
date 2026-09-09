@@ -24,24 +24,36 @@ actual decision trail if you need "why" on something not covered here.
   of storage backend (local file or Bitwarden Secrets Manager).
 - **FR6.** Provide a dry-run mode that performs the search step (read-only)
   and reports what *would* be matched/submitted, without ever submitting.
-- **FR7.** Never attempt to bypass an active CAPTCHA/Turnstile/reCAPTCHA
-  challenge — detect it and fail closed to a status requiring manual
-  human verification.
+- **FR7.** Bypass anti-bot challenges — including interactive CAPTCHA/
+  Turnstile/reCAPTCHA — using a real-browser-based, locally-run solver when
+  one is available and working (revised 2026-09-09; see THREAT_MODEL.md
+  "Anti-bot / CAPTCHA policy"). If no working solver exists for a given
+  challenge, fail closed to a status requiring manual human verification —
+  never guess, fabricate, or retry indefinitely against an unclearable
+  challenge.
 - **FR8.** Support at least three removal methods, in priority order:
-  API (if a broker has one) > web form > email (GDPR/CCPA-style request).
+  API (if a broker has one) > web form (bypassing anti-bot where a solver
+  exists) > email (GDPR/CCPA-style request, last resort — revised
+  2026-09-09, previously form > email with email as the anti-bot fallback).
 
 ### Should have (not yet built)
-- **FR9.** Email-based removal path (SMTP/GDPR-CCPA template), for brokers
-  whose web form is anti-bot-blocked but who honor formal email requests.
-- **FR10.** Scheduled/recurring re-runs — brokers re-list people from fresh
+- **FR9.** CAPTCHA/Turnstile solver integration (real-browser-based, e.g.
+  EzSolver/Theyka/Turnstile-Solver-style self-hosted service) — now the
+  higher-leverage near-term unlock per the revised anti-bot policy, since it
+  directly addresses the 7/12 brokers currently blocked by Cloudflare/
+  Turnstile on their web forms.
+- **FR10.** Email-based removal path (SMTP/GDPR-CCPA template) — demoted to
+  last-resort fallback (was previously the primary anti-bot workaround) for
+  brokers where no technical bypass path exists at all.
+- **FR11.** Scheduled/recurring re-runs — brokers re-list people from fresh
   source data periodically; a one-time run is not sufficient for real
   protection.
-- **FR11.** A packaged distribution (npm publish and/or binary/Docker image)
+- **FR12.** A packaged distribution (npm publish and/or binary/Docker image)
   so a non-technical user doesn't need to clone+build TypeScript themselves.
 
 ### Could have (explicitly deferred)
-- **FR12.** Desktop GUI (`apps/desktop`, planned in README, not started).
-- **FR13.** Self-hosted cloud/Terraform deployment (`apps/cloud`, scaffolded
+- **FR13.** Desktop GUI (`apps/desktop`, planned in README, not started).
+- **FR14.** Self-hosted cloud/Terraform deployment (`apps/cloud`, scaffolded
   but de-scoped after the local-first pivot — see DESIGN.md).
 
 ## Non-functional requirements

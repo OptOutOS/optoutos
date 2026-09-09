@@ -58,6 +58,10 @@ See `packages/core/src/brokers/` for the per-broker config/adapter status.
    manager (e.g. Bitwarden Secrets Manager), or cloud KMS-encrypted storage.
 4. Designed to meet [Privacy Guides' data-removal-service criteria](https://www.privacyguides.org/en/data-broker-removals/#criteria):
    not white-labeled, no data-broker industry affiliation, PII used only for opt-out.
+5. **Anti-bot bypass is in scope using real-browser, locally-run solvers only**
+   (revised 2026-09-09 — see THREAT_MODEL.md "Anti-bot / CAPTCHA policy"); no
+   third-party paid CAPTCHA-solving API is ever used. Email is the last-resort
+   removal method, not the primary anti-bot workaround.
 
 ## Status
 

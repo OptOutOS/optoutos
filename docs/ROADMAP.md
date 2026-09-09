@@ -41,19 +41,26 @@ judge this tool on don't exist yet for most brokers.
 - Governance docs: README, THREAT_MODEL, SECURITY, CONTRIBUTING,
   REQUIREMENTS, DESIGN (this set), BROKER_STATUS, FLARESOLVERR, PEOPLE_STORE.
 
-## Immediate next steps (in priority order, per most recent review)
+## Immediate next steps (in priority order, per most recent review, revised 2026-09-09)
 
-1. **Email-based removal path.** Highest leverage: unblocks brokers no
-   amount of Playwright/FlareSolverr engineering can, since 7/12 are
-   Cloudflare/Turnstile-blocked on their web forms specifically.
+1. **Integrate a real-browser CAPTCHA/Turnstile solver** (e.g. a self-hosted
+   EzSolver or Theyka/Turnstile-Solver instance, same self-hosted-HTTP-service
+   pattern as FlareSolverr). Per the revised anti-bot policy (see
+   THREAT_MODEL.md), this is now the highest-leverage unlock: 7 of 12 target
+   brokers are blocked specifically by Cloudflare/Turnstile on their web
+   forms. Third-party paid CAPTCHA APIs remain out of scope.
 2. **Spokeo / USPhonebook search parsing.** Apply the proven
    FlareSolverr-raw-HTML + cheerio pattern (see DESIGN.md decision #5) to
    the other 2 brokers already known to be reachable via FlareSolverr.
-3. **A first real, verified removal submission** on whichever broker's
-   opt-out step doesn't hit an active CAPTCHA — needed to prove the full
-   loop works, not just the search+scoring half.
+3. **A first real, verified removal submission** — needed to prove the full
+   loop works, not just the search+scoring half. The solver integration in
+   step 1 is likely a prerequisite for this on most brokers, since the
+   opt-out step (not just search) is often the one gated by reCAPTCHA.
 4. **Scheduling** — even a simple documented cron/Task-Scheduler recipe
    using the existing CLI would meet this need without new code.
+5. **Email-based removal path** — demoted from #1 to last-resort fallback,
+   for brokers where no technical bypass path exists at all (e.g. no
+   working solver for that anti-bot vendor).
 
 ## Deferred / explicitly out of scope for now
 

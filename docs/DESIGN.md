@@ -63,19 +63,36 @@ a shared database gated by an access-control check. Rationale: an ACL bug is
 a category of bug that simply cannot exist if there's no shared store to
 leak across in the first place.
 
-### 3. Method priority: API > form > email
-Chosen because forms are the most anti-bot-fragile channel and APIs
-essentially don't exist for these brokers in practice; email (formal
-GDPR/CCPA-style requests) is the fallback for brokers whose forms are
-Cloudflare/Turnstile-blocked, since email doesn't require clearing a
-JS challenge. (Email path not yet built — see docs/REQUIREMENTS.md FR9.)
+### 3. Method priority: form/bypass > API > email (revised 2026-09-09)
+**Original policy**: API > form > email, with email as the fallback for
+anti-bot-blocked forms.
+**Revised**: since anti-bot bypass is now in scope (see decision #4), a
+broker's own web form — with a real-browser CAPTCHA/Turnstile solver used
+where needed — is preferred over email whenever technically viable. Email
+(formal GDPR/CCPA-style requests) is now the **last resort**, used only when
+no technical path (API, or form with/without anti-bot solving) exists at
+all. APIs remain preferred over forms when a broker happens to expose one
+(none of the 12 target brokers do, in practice).
 
-### 4. Anti-bot policy: detect and fail closed, never bypass
-Any interactive CAPTCHA/Turnstile/reCAPTCHA challenge causes the adapter to
-return `requires_manual_verification` rather than attempt to solve or
-circumvent it. This is a hard line, not a cost/effort tradeoff — verified
-repeatedly in adapter code (e.g. `advancedbackgroundchecks.ts` opt-out step
-correctly refuses on reCAPTCHA even after search succeeds).
+### 4. Anti-bot policy: bypass with a real solver when available (revised 2026-09-09)
+**Original policy**: never attempt to solve or bypass any active CAPTCHA/
+Turnstile/reCAPTCHA challenge, full stop — fail closed to
+`requires_manual_verification` unconditionally.
+**Revised**: bypass anti-bot challenges using a real-browser-based,
+locally-run solver (e.g. a self-hosted EzSolver- or Theyka/Turnstile-Solver-
+style HTTP service, same pattern as FlareSolverr) when one is available and
+working. **Still forbidden**: any third-party paid CAPTCHA-solving API
+(2Captcha, CapSolver, Scrappey, etc.) — sending the challenge/traffic to an
+external company reintroduces exactly the third-party-trust problem this
+project exists to avoid. **Still required**: if no working solver exists for
+a given challenge type, fail closed to `requires_manual_verification` —
+never guess, never fabricate, never retry indefinitely.
+Rationale: the live broker survey found 7 of 12 target brokers blocked
+specifically by Cloudflare/Turnstile anti-bot — by far the largest blocker
+category. The original hard line meant most brokers were permanently capped
+regardless of adapter engineering effort. See THREAT_MODEL.md "Anti-bot /
+CAPTCHA policy" for the full rationale and the distinction from bulk/
+malicious scraping.
 
 ### 5. FlareSolverr + direct HTML parsing over fighting Playwright re-navigation
 Passive Cloudflare "Just a moment..." JS challenges (not CAPTCHAs — no human
