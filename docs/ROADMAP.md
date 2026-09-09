@@ -13,7 +13,8 @@ data from a meaningful fraction of the 12 target brokers, unattended,
 repeatably. Concretely:
 
 - [ ] Real working `search()` for **at least half** (6+/12) of the target
-      brokers (currently: **2/12** — `advancedbackgroundchecks`, `spokeo`).
+      brokers (currently: **3/12** — `advancedbackgroundchecks`, `spokeo`,
+      `usphonebook`).
 - [ ] At least one **successful, verified, real removal submission** end to
       end (currently: **zero** — every path either has no confirmed match to
       gate on, or correctly refuses at an active CAPTCHA/reCAPTCHA/account-
@@ -62,12 +63,9 @@ user would judge this tool on don't exist yet for most brokers.
    CloudFront block periodically**, or find a broker with a clean,
    currently-live interactive-Turnstile-only gate as the next real proof
    target.
-2. **USPhonebook search parsing** — the one remaining broker known to be
-   FlareSolverr-reachable that hasn't had the ABC/Spokeo cheerio-parsing
-   pattern applied yet. Its name-search flow has non-standard field
-   behavior (city field disabled until an unidentified client-side
-   interaction; Enter key doesn't submit) that needs dedicated
-   investigation, not a quick copy-paste of the existing pattern.
+2. **USPhonebook search parsing** — ✅ done (2026-09-09, Round 7). Real
+   search now works for all 3 brokers previously known to be
+   FlareSolverr/browser-reachable.
 3. **Thread a matched `candidateId` from `search()` into `optOut()`** — a
    real, not-yet-designed change to the `runRemoval()`/engine interface.
    Needed for Spokeo (which requires a broker-issued per-listing URL for
