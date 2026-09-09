@@ -1,0 +1,75 @@
+import type { Page } from "playwright";
+import type { PiiProfile } from "../pii.js";
+import type { BrokerAdapter, RemovalResult } from "./types.js";
+
+/**
+ * Whitepages opt-out adapter.
+ *
+ * Live verification performed 2026-09-09 against
+ * https://whitepages.com/suppression_requests using both plain Playwright and
+ * playwright-extra with the stealth plugin. Both requests were redirected to
+ * https://www.whitepages.com/suppression_requests and returned HTTP 403 with
+ * the Cloudflare page title "Attention Required! | Cloudflare" and rendered
+ * text "Sorry, you have been blocked" / "You are unable to access
+ * whitepages.com". No opt-out form, field, submit control, or API endpoint
+ * could therefore be verified. The response exposed a Cloudflare footer
+ * control with id #cf-footer-ip-reveal, but no Turnstile, hCaptcha, or
+ * reCAPTCHA marker was present in the rendered HTML.
+ *
+ * Per the anti-bot policy, this adapter does not bypass Cloudflare or submit
+ * an unverified request. It fails closed with requires_manual_verification
+ * when the block/challenge is observed, and with failed if the page changes
+ * without presenting a previously verified form. requiredFields is empty
+ * because no PII requirements were safely verifiable under the live block.
+ *
+ * Submission is intentionally dry-run only: even if the block is removed,
+ * this spike adapter never clicks a submit control until a real form is
+ * re-verified and the implementation is explicitly changed.
+ */
+export class WhitepagesAdapter implements BrokerAdapter {
+  readonly brokerId = "whitepages";
+  readonly brokerName = "Whitepages";
+  readonly method = "form" as const;
+  readonly searchUrl = "https://whitepages.com/";
+  readonly optOutUrl = "https://whitepages.com/suppression_requests";
+  readonly requiredFields = [] as const;
+
+  async optOut(page: Page, _profile: Partial<PiiProfile>): Promise<RemovalResult> {
+    const timestamp = new Date().toISOString();
+    await page.goto(this.optOutUrl, { waitUntil: "domcontentloaded" });
+
+    const html = await page.content();
+    const title = await page.title();
+    const bodyText = await page.locator("body").innerText().catch(() => "");
+    const cloudflareBlocked =
+      /cloudflare/i.test(title) ||
+      /sorry, you have been blocked|unable to access whitepages\.com/i.test(bodyText);
+    const antiBotMarker = page.locator(
+      ".cf-turnstile, #cf-turnstile, [class*='cf-chl-widget'], .g-recaptcha, [data-sitekey*='recaptcha'], .h-captcha, [data-sitekey*='hcaptcha']",
+    );
+    const hasAntiBotMarker = (await antiBotMarker.count()) > 0 ||
+      /cf-turnstile|g-recaptcha|h-captcha/i.test(html);
+
+    if (cloudflareBlocked || hasAntiBotMarker) {
+      return {
+        broker: this.brokerId,
+        status: "requires_manual_verification",
+        timestamp,
+        evidence: {
+          reason: cloudflareBlocked
+            ? "Cloudflare access block detected; automation does not bypass anti-bot protection"
+            : "Anti-bot widget detected; automation does not bypass CAPTCHA/Turnstile",
+          httpStatus: 403,
+        },
+      };
+    }
+
+    return {
+      broker: this.brokerId,
+      status: "failed",
+      timestamp,
+      evidence: {},
+      error: "Opt-out form structure was not verified; adapter fails closed rather than guessing selectors",
+    };
+  }
+}
