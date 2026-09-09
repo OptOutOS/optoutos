@@ -77,6 +77,14 @@ export interface BrokerAdapter {
    * broker's own publicly-displayed candidate records verbatim (redacted or
    * partial fields from the broker are fine — do not fabricate fields the
    * broker didn't actually show). Returns an empty array if no results.
+   *
+   * NOTE: this does not have to be a web-form/API search. An email-based
+   * adapter can equally implement search() as a minimal-PII "do you have a
+   * record for X?" inquiry email, awaiting/parsing a reply, before ever
+   * emailing the fuller PII needed for an actual removal request. The gate
+   * in engine.ts (runRemoval) applies identically regardless of method —
+   * "email" as a RemovalMethod is not an exemption from search-then-confirm,
+   * it is just another channel search() and optOut() can use.
    */
   search?(page: Page, minimalProfile: Partial<PiiProfile>): Promise<SearchCandidate[]>;
 

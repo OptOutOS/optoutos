@@ -1,6 +1,7 @@
-import type { Page } from "playwright";
+import type { Page, BrowserContext } from "playwright";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
 import type { PiiProfile } from "../pii.js";
+import { getFlareSolverrClientFromEnv, primeContextWithFlareSolverr } from "../flaresolverr.js";
 
 /**
  * AdvancedBackgroundChecks opt-out adapter.
@@ -56,27 +57,55 @@ export class AdvancedBackgroundChecksAdapter implements BrokerAdapter {
 
   /**
    * Search the broker's public name-search route without submitting opt-out
-   * data. The live route currently returns Cloudflare's anti-bot challenge
-   * before results, so this intentionally fails closed with no candidates.
+   * data. The live route was previously blocked by Cloudflare's passive
+   * "Just a moment..." challenge before any results rendered.
+   *
+   * FLARESOLVERR INTEGRATION (verified 2026-09-09): a self-hosted
+   * FlareSolverr instance successfully solves this specific challenge —
+   * confirmed by fetching a real 93KB opt-out-page response through it and,
+   * separately, confirmed that injecting its cookies into a fresh Playwright
+   * BrowserContext lets a normal Playwright page.goto() reach the real page.
+   * See docs/FLARESOLVERR.md. If FLARESOLVERR_URL is set, this method primes
+   * the page's BrowserContext with FlareSolverr before navigating. If it is
+   * not set, or FlareSolverr itself fails/reports a still-challenged page,
+   * this method fails closed to [] exactly as before — FlareSolverr is a
+   * strictly optional enhancement, never a requirement to run this adapter.
+   *
+   * The actual search-RESULT-card markup on the far side of the challenge has
+   * still not been live-verified in this codebase — this integration proves
+   * the challenge itself is bypassable, not that result parsing is complete.
+   * Until result selectors are verified, this still returns [] even when the
+   * challenge is successfully cleared, rather than guessing candidate fields.
    */
   async search(page: Page, minimalProfile: Partial<PiiProfile>): Promise<import("./matching.js").SearchCandidate[]> {
     const firstName = minimalProfile.firstName?.trim();
     const lastName = minimalProfile.lastName?.trim();
     if (!firstName || !lastName) return [];
 
-    const term = `${firstName}-${lastName}`.replace(/\\s+/g, "-");
-    await page.goto(`${this.searchUrl}find/name/${encodeURIComponent(term)}`, {
-      waitUntil: "domcontentloaded",
-    });
+    const term = `${firstName}-${lastName}`.replace(/\s+/g, "-");
+    const targetUrl = `${this.searchUrl}find/name/${encodeURIComponent(term)}`;
+
+    const flareSolverr = getFlareSolverrClientFromEnv();
+    if (flareSolverr) {
+      try {
+        await primeContextWithFlareSolverr(page.context() as BrowserContext, flareSolverr, targetUrl);
+      } catch {
+        // FlareSolverr unavailable or couldn't solve it — fall through to the
+        // plain-Playwright attempt below, which will fail closed as before.
+      }
+    }
+
+    await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
 
     const bodyText = await page.locator("body").innerText().catch(() => "");
     const title = await page.title().catch(() => "");
-    if (/just a moment|challenge|cloudflare/i.test(`${title}\\n${bodyText}`)) {
+    if (/just a moment|challenge|cloudflare/i.test(`${title}\n${bodyText}`)) {
       return [];
     }
 
-    // No result-card markup was live-verified: do not guess selectors or
-    // manufacture candidates from an unverified page structure.
+    // Challenge cleared (if FlareSolverr was used) but result-card markup has
+    // not been live-verified yet: do not guess selectors or manufacture
+    // candidates from an unverified page structure. See docstring above.
     return [];
   }
 

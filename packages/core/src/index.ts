@@ -1,4 +1,5 @@
 export * from "./pii.js";
+export * from "./flaresolverr.js";
 export * from "./brokers/types.js";
 export * from "./brokers/matching.js";
 export * from "./brokers/engine.js";
