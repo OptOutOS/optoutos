@@ -2,6 +2,9 @@ import type { Page } from "playwright";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
 import type { SearchCandidate } from "./matching.js";
 import type { PiiProfile } from "../pii.js";
+import { getTurnstileSolverClientFromEnv } from "../turnstile-solver.js";
+import { solveTurnstileOnPage } from "../turnstile-page-helper.js";
+import { TurnstileSolverError } from "../turnstile-solver.js";
 
 /**
  * That'sThem opt-out adapter.
@@ -17,16 +20,18 @@ import type { PiiProfile } from "../pii.js";
  *   #phone   (tel, required)
  * Submit button text: "Submit Opt-Out Request"
  *
- * ⚠ ANTI-BOT STATUS (verified 2026-09-09): This site serves a Cloudflare
- * Turnstile interactive "Confirm you're human" challenge to automated
- * browsers (confirmed via captured cf-turnstile widget markup), not just a
- * passive JS check. Per project policy ("anti-bot if easy, otherwise move
- * on" — no CAPTCHA-solving in this project), this adapter does NOT attempt
- * to bypass Turnstile. It fails closed with "requires_manual_verification"
- * whenever the challenge is detected. A real desktop-browser session (not
+ * ⚠ ANTI-BOT STATUS (verified 2026-09-09; policy revised 2026-09-09): This
+ * site serves a Cloudflare Turnstile interactive "Confirm you're human"
+ * challenge to automated browsers (confirmed via captured cf-turnstile
+ * widget markup), not just a passive JS check. Per REVISED project policy
+ * (see THREAT_MODEL.md "Anti-bot / CAPTCHA policy"), this adapter now
+ * attempts to solve Turnstile via a self-hosted, real-browser solver
+ * service (TURNSTILE_SOLVER_URL — e.g. EzSolver or Theyka/Turnstile-Solver)
+ * when one is configured. If no solver is configured, or the solver fails,
+ * it falls back to "requires_manual_verification" exactly as before — never
+ * guesses or fabricates a submission. A real desktop-browser session (not
  * headless/stealth-patched) reached the actual form without a challenge,
- * suggesting the trigger is bot-fingerprinting rather than a universal gate
- * — worth re-testing periodically, but not worth building a solver for now.
+ * suggesting the trigger is bot-fingerprinting rather than a universal gate.
  *
  * Search status (checked 2026-09-09): the public lookup URL
  * https://thatsthem.com/name/John-Smith/Seattle-WA was requested with dummy
@@ -98,18 +103,41 @@ export class ThatsThemAdapter implements BrokerAdapter {
 
     await page.goto(this.optOutUrl, { waitUntil: "domcontentloaded" });
 
-    // Anti-bot policy: detect (don't attempt to bypass) an active Turnstile
-    // challenge and fail closed for manual handling. See class docstring.
+    // Anti-bot policy (revised 2026-09-09): attempt to solve an active
+    // Turnstile challenge via a configured real-browser solver service
+    // before falling back to manual verification. See class docstring and
+    // THREAT_MODEL.md "Anti-bot / CAPTCHA policy".
     const turnstileChallenge = page.locator(".cf-turnstile, #cf-turnstile, [class*='cf-chl-widget']");
     if (await turnstileChallenge.count()) {
-      return {
-        broker: this.brokerId,
-        status: "requires_manual_verification",
-        timestamp,
-        evidence: {
-          reason: "Cloudflare Turnstile challenge detected — automation intentionally does not attempt to bypass CAPTCHA/anti-bot widgets",
-        },
-      };
+      const solverClient = getTurnstileSolverClientFromEnv();
+      if (!solverClient) {
+        return {
+          broker: this.brokerId,
+          status: "requires_manual_verification",
+          timestamp,
+          evidence: {
+            reason:
+              "Cloudflare Turnstile challenge detected and no TURNSTILE_SOLVER_URL configured — cannot attempt bypass",
+          },
+        };
+      }
+
+      try {
+        await solveTurnstileOnPage(page, solverClient);
+      } catch (err) {
+        return {
+          broker: this.brokerId,
+          status: "requires_manual_verification",
+          timestamp,
+          evidence: {
+            reason:
+              err instanceof TurnstileSolverError
+                ? `Turnstile solver failed: ${err.message}`
+                : `Turnstile solver failed with an unexpected error: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        };
+      }
+      // Solved — fall through to fill and submit the form below.
     }
 
     // Fail closed if the form structure has changed since verification.

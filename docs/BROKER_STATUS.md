@@ -175,8 +175,49 @@ implementing.
   closed — confirming the two anti-bot layers on this broker are independent
   and both handled correctly.
 
-**Not yet done:** Spokeo and USPhonebook still need equivalent
-result-parsing work. USPhonebook's name-search flow proved harder than
-expected — city field is disabled until an unidentified client-side
-interaction fires, and Enter-key submission didn't trigger a real search —
-needs a dedicated follow-up rather than being rushed.
+**Not yet done:** Spokeo and USPhonebook still need the equivalent
+result-parsing work. USPhonebook's name-search flow proved harder to
+automate than expected (city field is disabled until some client-side
+interaction fires; Enter-key submission didn't trigger a real search) —
+needs a dedicated follow-up session rather than being rushed.
+
+## Round 4 — Turnstile solver integration (2026-09-09)
+
+Per the revised anti-bot policy (THREAT_MODEL.md "Anti-bot / CAPTCHA
+policy"), built and verified a real Turnstile-solving integration:
+`turnstile-solver.ts` (`TurnstileSolverClient`, solver-agnostic HTTP client)
+and `turnstile-page-helper.ts` (`solveTurnstileOnPage()` — detects a
+`cf-turnstile` sitekey on the current page, solves it, injects the token
+into the page's `cf-turnstile-response` hidden input). Wired into
+`thatsthem.ts` as the reference integration.
+
+**Verified live, end to end, with a real self-hosted EzSolver instance**
+(https://github.com/ismoiloffS/EzSolver):
+- Real solve via curl and via our actual TypeScript `TurnstileSolverClient`
+  against Cloudflare's own public test sitekey (`1x00000000000000000000AA`)
+  — both returned the expected `XXXX.DUMMY.TOKEN.XXXX` response.
+- Real `solveTurnstileOnPage()` end-to-end: extracted a sitekey from real
+  page HTML, called the live solver, and confirmed the token was correctly
+  injected into a `cf-turnstile-response` input on the page.
+
+**Real environment issue found and fixed while setting this up:** running
+`TS_PROFILE_DIR` through git-bash's `$TEMP` produced a POSIX-style path
+(`/tmp/...`) that native Windows `chrome.exe` cannot create/write to,
+causing an opaque "Failed to connect to browser... running as root" error
+from nodriver that had nothing to do with sandboxing. Root cause confirmed
+by testing EzSolver's standalone CLI mode (which uses its own internal
+Windows-correct default profile path) successfully first, isolating the
+issue to the environment-variable path mangling rather than EzSolver's code
+or nodriver itself. Fix: don't override `TS_PROFILE_DIR` from a bash shell
+on Windows; let it use its own OS-aware default.
+
+**Not yet re-verified:** That'sThem's live anti-bot posture appears to have
+shifted again since the last check — a fresh headless Playwright request to
+`thatsthem.com/optout` now returns a flat CloudFront 403 ("The request could
+not be satisfied") before any Turnstile widget is even served, rather than
+the Turnstile challenge previously documented. This means the solver
+integration itself is verified working, but a full live end-to-end proof
+specifically against That'sThem's real opt-out page is currently blocked by
+this new 403, not by the solver. Re-check when That'sThem's anti-bot posture
+stabilizes, or pursue a different broker's Turnstile challenge as the live
+proof target instead.

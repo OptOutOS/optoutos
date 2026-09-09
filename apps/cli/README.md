@@ -92,6 +92,20 @@ those, set `FLARESOLVERR_URL` (e.g. `http://localhost:8191`) to a
 self-hosted FlareSolverr instance before running the CLI. Brokers whose
 search doesn't need it will ignore the env var entirely.
 
+## Some brokers require a Turnstile/CAPTCHA solver (revised 2026-09-09)
+
+Some brokers' opt-out/search pages present an interactive Cloudflare
+Turnstile challenge — not the passive JS check FlareSolverr handles. Per the
+project's revised anti-bot policy (see `THREAT_MODEL.md`), this is bypassed
+using a real-browser, locally-run solver service (e.g. a self-hosted
+[EzSolver](https://github.com/ismoiloffS/EzSolver) instance). Set
+`TURNSTILE_SOLVER_URL` (e.g. `http://localhost:8191`, on a different port
+than FlareSolverr if both are running) to enable this. If unset, or the
+solver fails, the adapter falls back to `requires_manual_verification`
+exactly as before — never guesses or fabricates a submission. Only
+real-browser, locally-run solvers are ever used — never a third-party paid
+CAPTCHA-solving API.
+
 ## Exit codes
 
 - `0` — command completed (including a clean "no match found" result).
