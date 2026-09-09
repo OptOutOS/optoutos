@@ -152,4 +152,53 @@ describe("runRemoval", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toContain("network error");
   });
+
+  it("never calls optOut() when dryRun:true is passed, even on a confirmed match", async () => {
+    const strongCandidate: SearchCandidate = {
+      candidateId: "strong",
+      observedName: "John Smith",
+      observedCity: "Seattle",
+      observedState: "WA",
+      observedZip: "98101",
+    };
+    const adapter = makeAdapter({
+      search: vi.fn(async (): Promise<SearchCandidate[]> => [strongCandidate]),
+    });
+
+    const result = await runRemoval(adapter, fakePage, fullProfile, { dryRun: true });
+
+    expect(adapter.optOut).not.toHaveBeenCalled();
+    expect(result.status).toBe("dry_run_match_found");
+    expect(result.matchDetails?.candidate).toEqual(strongCandidate);
+  });
+
+  it("calls optOut() as normal when dryRun is omitted (defaults to false)", async () => {
+    const strongCandidate: SearchCandidate = {
+      candidateId: "strong",
+      observedName: "John Smith",
+      observedCity: "Seattle",
+      observedState: "WA",
+      observedZip: "98101",
+    };
+    const adapter = makeAdapter({
+      search: vi.fn(async (): Promise<SearchCandidate[]> => [strongCandidate]),
+    });
+
+    const result = await runRemoval(adapter, fakePage, fullProfile);
+
+    expect(adapter.optOut).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe("submitted");
+  });
+
+  it("dryRun:true still searches (read-only) and still surfaces no_match_found honestly", async () => {
+    const adapter = makeAdapter({
+      search: vi.fn(async (): Promise<SearchCandidate[]> => []),
+    });
+
+    const result = await runRemoval(adapter, fakePage, fullProfile, { dryRun: true });
+
+    expect(adapter.search).toHaveBeenCalled();
+    expect(adapter.optOut).not.toHaveBeenCalled();
+    expect(result.status).toBe("no_match_found");
+  });
 });

@@ -1,0 +1,32 @@
+{
+  "name": "@optoutos/cli",
+  "version": "0.0.1",
+  "description": "Local-first CLI for running OptOutOS broker removals from your own machine.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "bin": {
+    "optoutos": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/cli.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@optoutos/core": "*",
+    "playwright": "^1.47.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "typescript": "^5.6.2",
+    "vitest": "^3.0.0",
+    "eslint": "^9.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "eslint-config-prettier": "^9.0.0"
+  }
+}

@@ -25,6 +25,7 @@ export type RemovalStatus =
   | "already_absent"
   | "no_match_found"
   | "requires_manual_verification"
+  | "dry_run_match_found"
   | "failed";
 
 export interface RemovalResult {

@@ -34,11 +34,29 @@ import {
  * runRemoval() surfaces this as "requires_manual_verification" rather than
  * silently skipping the gate — a human must confirm identity out of band.
  */
+export interface RunRemovalOptions {
+  /**
+   * When true, runRemoval() still performs the read-only search() step (so
+   * callers can see what would be matched) but NEVER calls optOut(), even if
+   * a candidate clears MATCH_CONFIDENCE_THRESHOLD. Returns status
+   * "dry_run_match_found" instead of proceeding to submission.
+   *
+   * Defaults to false. This is the mechanism that makes a CLI/UI's
+   * "dry-run by default, --execute to actually submit" promise real —
+   * without it, that promise was previously enforced nowhere in the engine
+   * itself (found and fixed 2026-09-09: the CLI's --execute flag existed
+   * but had no effect on this function).
+   */
+  dryRun?: boolean;
+}
+
 export async function runRemoval(
   adapter: BrokerAdapter,
   page: Page,
   fullProfile: PiiProfile,
+  options: RunRemovalOptions = {},
 ): Promise<RemovalResult & { matchDetails?: MatchScoreResult }> {
+  const { dryRun = false } = options;
   const timestamp = new Date().toISOString();
 
   if (!adapter.search) {
@@ -102,6 +120,20 @@ export async function runRemoval(
 
   // Only now — after a locally-confirmed match — do we let the adapter send
   // the fuller PII needed to actually submit removal.
+  if (dryRun) {
+    return {
+      broker: adapter.brokerId,
+      status: "dry_run_match_found",
+      timestamp,
+      evidence: {
+        candidatesReturned: candidates.length,
+        bestScore: Math.round(best.score * 100) / 100,
+        threshold: MATCH_CONFIDENCE_THRESHOLD,
+      },
+      matchDetails: best,
+    };
+  }
+
   const removalFields = adapter.requiredFields;
   const removalProfile = (await import("../pii.js")).pickPiiFields(fullProfile, removalFields);
 
