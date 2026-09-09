@@ -8,8 +8,10 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node --test dist/**/*.test.js",
-    "lint": "tsc --noEmit"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "playwright": "^1.47.0",
@@ -19,6 +21,12 @@
   },
   "devDependencies": {
     "@types/node": "^22.5.0",
-    "typescript": "^5.6.2"
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
+    "eslint": "^10.10.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
+    "typescript": "^5.6.2",
+    "vitest": "^5.0.0"
   }
 }
