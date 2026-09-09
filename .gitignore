@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+.DS_Store
+.vscode/
+*.pem
+*.key
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl

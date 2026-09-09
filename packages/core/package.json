@@ -1,0 +1,22 @@
+{
+  "name": "@optoutos/core",
+  "version": "0.0.1",
+  "description": "Broker registry, removal engine, PII-source abstraction, and Playwright adapters shared by every OptOutOS surface (CLI, desktop, cloud).",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/**/*.test.js",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "playwright": "^1.47.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2",
+    "@types/node": "^22.5.0"
+  }
+}
