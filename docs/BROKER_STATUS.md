@@ -81,13 +81,70 @@ What IS proven:
   entirely) is the more scalable long-term default — a real design signal
   from this batch, not a guess.
 
+## Round 2 — search() implementation attempt (2026-09-09)
+
+Attempted to implement real, live-verified `search()` methods for 7 of the
+12 brokers (Advanced Background Checks, That'sThem, USPhonebook,
+CheckPeople, InfoTracer, Spokeo, Whitepages) as the natural next step after
+the privacy-minimization gate (above) made a working `search()` the actual
+bottleneck to any broker moving past `requires_manual_verification`.
+
+**Result: 0 of 7 reached real, verifiable search results.** Every broker
+hit an anti-bot wall before a result listing was ever rendered:
+
+| Broker | What blocked it |
+|---|---|
+| Advanced Background Checks | Cloudflare "Just a moment..." challenge on the `/find/name/{term}` route |
+| That'sThem | Generic error page on the `/name/{first}-{last}/{city}-{state}` route (previously Turnstile; today a different error — anti-bot posture appears to shift) |
+| USPhonebook | Bare host returns Cloudflare 403 before the `/search` POST endpoint is reachable |
+| CheckPeople | HTTP 403 with an "anonymous access" verification wall |
+| InfoTracer | The search form itself loads (HTTP 200, real fields confirmed: firstname/lastname/city/state), but a real dummy submission is rejected with HTTP 400 before any result renders |
+| Spokeo | HTTP 403, no search form reachable at all |
+| Whitepages | HTTP 403 after redirect to `www.whitepages.com` |
+
+Every adapter was updated to add a `searchFields` property and a `search()`
+method that fails closed to `[]` rather than fabricating a result — no
+candidate data was invented for any broker. This is the correct outcome
+under the project's "anti-bot if easy, otherwise move on" policy, but it
+means these 7 adapters are functionally unchanged in practice: they still
+resolve to `requires_manual_verification` via the engine's "no confirmed
+candidates" path (identical end state to before, just now via a real
+attempted-and-failed search rather than a "no search() at all" stub).
+
+**What this confirms, not just suspects:** the web-form automation path is
+close to exhausted for this broker set under the current
+Playwright/playwright-extra+stealth approach. Real next options, in rough
+order of expected leverage:
+
+1. **Email-based (GDPR/CCPA) removal requests** — the `eraser`-validated
+   pattern. Sidesteps web-form anti-bot entirely. Should now be treated as
+   the primary path for most of these 12 brokers, not a fallback — this is
+   the second independent data point (after Round 1) pointing the same way.
+2. **FlareSolverr** (see earlier discussion) — could plausibly unblock the
+   *passive* Cloudflare challenges (Whitepages, USPhonebook's bare-host
+   403, possibly Advanced Background Checks' "Just a moment" screen) since
+   those are compute-challenge pages, not interactive CAPTCHAs. Would not
+   help CheckPeople/Spokeo's harder walls or That'sThem's Turnstile.
+   Deferred per user decision until the engine work was solid — now is a
+   reasonable time to revisit.
+3. Accept that a meaningful fraction of this broker set is permanently
+   manual-only (documented via `requires_manual_verification` with clear
+   evidence), and let the CLI surface these as a checklist/reminder for the
+   user, similar to Privacy Guides' own "5 minutes a week" manual strategy —
+   rather than chasing full automation on brokers whose whole business model
+   depends on resisting exactly this kind of automation.
+
 ## Immediate next real steps
 
 1. Build the email-based (SMTP/GDPR-CCPA template) removal path — the
    `eraser`-validated pattern — as the actual primary path for most of these
-   brokers, since form automation is blocked on 7/12.
+   brokers, since form automation is blocked on 7/12 (Round 1) and remains
+   blocked at the search step for the same 7 (Round 2).
 2. Add a `listingUrl` field (or similar) to `PiiProfile` / a broker-specific
    metadata bag for Spokeo-style per-listing opt-outs.
 3. Decide whether Intelius/Radaris (identity-verification-heavy) belong in
    the "automatable" registry at all, or should be permanently
    manual-only/documentation-only entries.
+4. Evaluate FlareSolverr specifically against Whitepages and USPhonebook
+   (plain Cloudflare 403s, no CAPTCHA widget observed) as a targeted,
+   policy-compliant unblock before writing them off as fully manual.

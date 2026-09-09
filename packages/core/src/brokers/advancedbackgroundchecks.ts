@@ -32,6 +32,18 @@ import type { PiiProfile } from "../pii.js";
  * the initial form only requests name and email, requiredFields contains only
  * those PII fields. A user must complete the emailed continuation link
  * manually after this adapter returns.
+ *
+ * SEARCH STATUS (verified 2026-09-09): the public home page exposes a Name
+ * form with observed controls aria-label="First name", aria-label="Last name",
+ * aria-label="City", and aria-label="State"; its name-search action leads to
+ * /find/name/{term}. A live request to that action is stopped by Cloudflare's
+ * "Just a moment..." challenge before any broker result cards are rendered.
+ * No result-card DOM was therefore observed or used here. search() detects the
+ * challenge and returns [] (fail closed); it never treats a challenge page as
+ * a candidate and never guesses selectors for result cards. This adapter cannot
+ * currently provide an automatable, live-verified public search until the broker
+ * permits the request or its result markup can be inspected without bypassing
+ * anti-bot protection.
  */
 export class AdvancedBackgroundChecksAdapter implements BrokerAdapter {
   readonly brokerId = "advancedbackgroundchecks";
@@ -40,6 +52,33 @@ export class AdvancedBackgroundChecksAdapter implements BrokerAdapter {
   readonly searchUrl = "https://advancedbackgroundchecks.com/";
   readonly optOutUrl = "https://www.advancedbackgroundchecks.com/opt-out";
   readonly requiredFields = ["firstName", "lastName", "emails"] as const;
+  readonly searchFields = ["firstName", "lastName"] as const;
+
+  /**
+   * Search the broker's public name-search route without submitting opt-out
+   * data. The live route currently returns Cloudflare's anti-bot challenge
+   * before results, so this intentionally fails closed with no candidates.
+   */
+  async search(page: Page, minimalProfile: Partial<PiiProfile>): Promise<import("./matching.js").SearchCandidate[]> {
+    const firstName = minimalProfile.firstName?.trim();
+    const lastName = minimalProfile.lastName?.trim();
+    if (!firstName || !lastName) return [];
+
+    const term = `${firstName}-${lastName}`.replace(/\\s+/g, "-");
+    await page.goto(`${this.searchUrl}find/name/${encodeURIComponent(term)}`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    const bodyText = await page.locator("body").innerText().catch(() => "");
+    const title = await page.title().catch(() => "");
+    if (/just a moment|challenge|cloudflare/i.test(`${title}\\n${bodyText}`)) {
+      return [];
+    }
+
+    // No result-card markup was live-verified: do not guess selectors or
+    // manufacture candidates from an unverified page structure.
+    return [];
+  }
 
   async optOut(page: Page, profile: Partial<PiiProfile>): Promise<RemovalResult> {
     const timestamp = new Date().toISOString();

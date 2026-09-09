@@ -1,6 +1,7 @@
 import type { Page } from "playwright";
 import type { PiiProfile } from "../pii.js";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
+import type { SearchCandidate } from "./matching.js";
 
 /**
  * US Phone Book opt-out adapter.
@@ -26,6 +27,21 @@ import type { BrokerAdapter, RemovalResult } from "./types.js";
  * email needed for the initial request; an agent flow would additionally need
  * agent fields supplied by a future explicit agent-profile API.
  *
+ * SEARCH VERIFICATION (2026-09-09): The public home page is a distinct
+ * reverse-phone search UI. Its live server-rendered form uses POST /search,
+ * with hidden CSRF `_token`, `searchType`, and `searchTextField`; the visible
+ * input is `#pfHeaderInput` (the hero form uses `#pfHeroInput`). The page
+ * advertises Phone, Name, and Address tabs, but the verified HTML defaults to
+ * Phone and the name/address controls are disabled until the tab is changed.
+ * A direct live request to the bare domain was blocked with HTTP 403 by
+ * Cloudflare in this environment, while the www home page returned HTTP 200
+ * and exposed the form. Because the actual rendered search POST/result page
+ * could not be reached without an interactive browser session, no result
+ * selectors or candidate fields were personally verified. `search()` therefore
+ * fails closed with an empty array and does not attempt the opt-out flow.
+ * This is a search-specific access block; it is distinct from the reCAPTCHA
+ * gate observed on /opt-out.
+ *
  * Submission is intentionally dry-run only: after filling the observed
  * subject fields, it returns requires_manual_verification without clicking the
  * real request button or sending an email.
@@ -37,6 +53,19 @@ export class UsPhonebookAdapter implements BrokerAdapter {
   readonly searchUrl = "https://usphonebook.com/opt-out";
   readonly optOutUrl = "https://usphonebook.com/opt-out";
   readonly requiredFields = ["firstName", "lastName", "emails"] as const;
+  readonly searchFields = ["phones"] as const;
+
+  /**
+   * The verified public search is a reverse-phone lookup. The actual POST
+   * search/result response was not reachable from the available live browser
+   * session (the bare host returned Cloudflare HTTP 403), so returning any
+   * candidate would violate the broker-owned-results requirement. Never call
+   * optOut() or guess result selectors here; fail closed until the result page
+   * is live-verified.
+   */
+  async search(_page: Page, _minimalProfile: Partial<PiiProfile>): Promise<SearchCandidate[]> {
+    return [];
+  }
 
   async optOut(page: Page, profile: Partial<PiiProfile>): Promise<RemovalResult> {
     const timestamp = new Date().toISOString();

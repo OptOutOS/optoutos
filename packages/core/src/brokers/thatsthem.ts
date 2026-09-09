@@ -1,5 +1,6 @@
 import type { Page } from "playwright";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
+import type { SearchCandidate } from "./matching.js";
 import type { PiiProfile } from "../pii.js";
 
 /**
@@ -27,8 +28,13 @@ import type { PiiProfile } from "../pii.js";
  * suggesting the trigger is bot-fingerprinting rather than a universal gate
  * — worth re-testing periodically, but not worth building a solver for now.
  *
- * No search/lookup step is required before opting out — the form accepts a
- * direct removal request when reachable.
+ * Search status (checked 2026-09-09): the public lookup URL
+ * https://thatsthem.com/name/John-Smith/Seattle-WA was requested with dummy
+ * data, but the live automated request returned an error page before any
+ * listing fields could be observed. Cloudflare Turnstile detection is retained
+ * for sessions where the challenge is rendered; this adapter never attempts
+ * to bypass it. It fails closed with [] and never infers fields from the URL
+ * or from other sites. Re-verify the result DOM if the broker becomes reachable.
  *
  * Required fields are deliberately minimal: only what the form asks for.
  * That'sThem requires a single street address; if the profile has multiple
@@ -42,6 +48,37 @@ export class ThatsThemAdapter implements BrokerAdapter {
   readonly searchUrl = "https://thatsthem.com/";
   readonly optOutUrl = "https://thatsthem.com/optout";
   readonly requiredFields = ["firstName", "lastName", "addresses", "emails", "phones"] as const;
+  readonly searchFields = ["firstName", "lastName", "addresses"] as const;
+
+  /**
+   * Search That'sThem before any removal request is considered.
+   *
+   * The public search page was checked on 2026-09-09 with dummy input
+   * (John Smith, Seattle WA), but the live automated request reached an error
+   * page before a result listing was rendered. We intentionally do not bypass
+   * anti-bot checks. Because no result DOM/fields were verified, this method
+   * returns no candidates rather than guessing selectors or fabricating a
+   * match. This makes runRemoval fail closed and prevents optOut() from being
+   * reached.
+   */
+  async search(page: Page, minimalProfile: Partial<PiiProfile>): Promise<SearchCandidate[]> {
+    const firstName = minimalProfile.firstName?.trim();
+    const lastName = minimalProfile.lastName?.trim();
+    const address = minimalProfile.addresses?.[0];
+    if (!firstName || !lastName || !address?.city || !address.state) return [];
+
+    const slug = (value: string) => value.trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+    const state = address.state.length === 2 ? address.state.toUpperCase() : slug(address.state);
+    const url = `${this.searchUrl}name/${slug(firstName)}-${slug(lastName)}/${slug(address.city)}-${state}`;
+    await page.goto(url, { waitUntil: "domcontentloaded" });
+
+    const turnstile = page.locator(".cf-turnstile, #cf-turnstile, [class*='cf-chl-widget'], iframe[src*='challenges.cloudflare.com']");
+    if (await turnstile.count()) return [];
+
+    // No result selectors are used until a non-challenged listing is
+    // independently re-verified on the live site. Fail closed meanwhile.
+    return [];
+  }
 
   async optOut(page: Page, profile: Partial<PiiProfile>): Promise<RemovalResult> {
     const timestamp = new Date().toISOString();

@@ -18,10 +18,13 @@ import type { SearchCandidate } from "./matching.js";
  * categories, but no stable listing URL can be derived from a PiiProfile alone.
  * Therefore this adapter does not guess a record or URL.
  *
- * The opt-out page was reachable in rendered-page extraction, while direct
- * HTTP inspection returned 403. Anti-bot markers are checked in the live DOM;
- * this adapter never attempts to bypass a CAPTCHA or challenge. Submission is
- * intentionally dry-run only.
+ * Live search verification with dummy John Smith / Seattle, WA data was
+ * blocked: https://spokeo.com/search returned HTTP 403 to the live client.
+ * No search form, result card, or broker-observed profile URL was available
+ * to verify. The adapter therefore fails closed by returning an empty result;
+ * it never bypasses a CAPTCHA or challenge and never opts out from search().
+ * The opt-out page was also observed to require a per-listing profile URL.
+ * Submission is intentionally dry-run only.
  */
 export class SpokeoAdapter implements BrokerAdapter {
   readonly brokerId = "spokeo";
@@ -30,9 +33,16 @@ export class SpokeoAdapter implements BrokerAdapter {
   readonly searchUrl = "https://spokeo.com/search";
   readonly optOutUrl = "https://spokeo.com/optout";
   readonly requiredFields = ["emails"] as const;
+  readonly searchFields = ["firstName", "lastName", "addresses"] as const;
 
+  /**
+   * Search is fail-closed because the live public search returned HTTP 403
+   * during verification with dummy John Smith / Seattle, WA data. Since no
+   * broker-rendered form or result was available, returning candidates would
+   * require fabricating fields or a profile URL.
+   */
   async search(page: Page, _profile: Partial<PiiProfile>): Promise<SearchCandidate[]> {
-    await page.goto(this.searchUrl, { waitUntil: "domcontentloaded" });
+    await page.goto(this.searchUrl, { waitUntil: "domcontentloaded" }).catch(() => undefined);
     return [];
   }
 

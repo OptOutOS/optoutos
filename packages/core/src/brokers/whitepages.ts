@@ -6,15 +6,17 @@ import type { BrokerAdapter, RemovalResult } from "./types.js";
  * Whitepages opt-out adapter.
  *
  * Live verification performed 2026-09-09 against
- * https://whitepages.com/suppression_requests using both plain Playwright and
- * playwright-extra with the stealth plugin. Both requests were redirected to
- * https://www.whitepages.com/suppression_requests and returned HTTP 403 with
- * the Cloudflare page title "Attention Required! | Cloudflare" and rendered
- * text "Sorry, you have been blocked" / "You are unable to access
- * whitepages.com". No opt-out form, field, submit control, or API endpoint
- * could therefore be verified. The response exposed a Cloudflare footer
- * control with id #cf-footer-ip-reveal, but no Turnstile, hCaptcha, or
- * reCAPTCHA marker was present in the rendered HTML.
+ * https://whitepages.com/ and https://whitepages.com/suppression_requests
+ * using both plain Playwright and playwright-extra with the stealth plugin.
+ * The public search navigation was blocked before a search form or results
+ * could be reached: requests were redirected to www.whitepages.com and
+ * returned HTTP 403 with the Cloudflare page title "Attention Required! |
+ * Cloudflare" and rendered text "Sorry, you have been blocked" / "You are
+ * unable to access whitepages.com". No search form, result card, candidate
+ * fields, or listing URL could therefore be verified with dummy John Smith /
+ * Seattle, WA data. The response exposed a Cloudflare footer control with id
+ * #cf-footer-ip-reveal, but no Turnstile, hCaptcha, or reCAPTCHA marker was
+ * present in the rendered HTML.
  *
  * Per the anti-bot policy, this adapter does not bypass Cloudflare or submit
  * an unverified request. It fails closed with requires_manual_verification
@@ -33,6 +35,16 @@ export class WhitepagesAdapter implements BrokerAdapter {
   readonly searchUrl = "https://whitepages.com/";
   readonly optOutUrl = "https://whitepages.com/suppression_requests";
   readonly requiredFields = [] as const;
+  readonly searchFields = ["firstName", "lastName", "addresses"] as const;
+
+  /**
+   * Search is fail-closed because the live public search was blocked by
+   * Cloudflare HTTP 403 before any form or result selectors were available.
+   */
+  async search(page: Page, _profile: Partial<PiiProfile>): Promise<import("./matching.js").SearchCandidate[]> {
+    await page.goto(this.searchUrl, { waitUntil: "domcontentloaded" }).catch(() => undefined);
+    return [];
+  }
 
   async optOut(page: Page, _profile: Partial<PiiProfile>): Promise<RemovalResult> {
     const timestamp = new Date().toISOString();

@@ -1,29 +1,27 @@
 import type { Page } from "playwright";
 import type { PiiProfile } from "../pii.js";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
+import type { SearchCandidate } from "./matching.js";
 
 /**
  * InfoTracer opt-out adapter.
  *
- * DNS resolved infotracer.com on 2026-09-09 (addresses included
- * 3.170.103.91, 3.170.103.81, 3.170.103.76, and 3.170.103.13).
- * The live opt-out URL redirected to https://infotracer.com/optout/ and was
- * inspected on 2026-09-09. It did not expose an opt-out form: the rendered
- * page displayed "Are you human?" and "You are accessing a page that needs
- * extra human verification ...". The HTML contained the observed form
- * #are-you, pointer-event verification script, and generated hidden fields
- * named _csrf-frontend, bot-token-0, and other bot-token-* fields.
+ * Live verification on 2026-09-09:
+ * - DNS resolved infotracer.com.
+ * - The distinct public search page https://infotracer.com/ was reachable
+ *   (HTTP 200) and visibly exposed a name form with the observed fields
+ *   firstname, lastname, optional city, state, and a POST action under
+ *   /loading/?ltid=home&mercSubId=home-name&type=name&searchTab=name.
+ * - A dummy John Smith / Seattle, WA submission did not produce a verified
+ *   public result listing in this runtime: the POST was rejected with HTTP
+ *   400. Therefore no result-listing structure or candidate fields were
+ *   observed, and search() fails closed with [].
+ * - The opt-out URL separately displays InfoTracer's "Are you human?" gate
+ *   with #are-you and bot-token-* fields; this adapter never bypasses it.
  *
- * This is a direct opt-out URL, but the actual removal form cannot be
- * inspected until the site's interactive human-verification gate is passed.
- * No public opt-out API was found on the inspected site pages. Therefore the
- * adapter uses the form method and fails closed with
- * "requires_manual_verification" when the observed gate is present. It never
- * attempts to bypass or solve the challenge, and it does not submit anything.
- *
- * Selectors asserted here are only the challenge markers observed live:
- * #are-you, [name="_csrf-frontend"], and [name^="bot-token-"]. No removal
- * form selectors are inferred or claimed.
+ * The reachable search form is not sufficient to claim a match: only broker-
+ * observed result records may be returned, so this adapter does not fabricate
+ * candidates from the form or from the 400 response.
  */
 export class InfoTracerAdapter implements BrokerAdapter {
   readonly brokerId = "infotracer";
@@ -31,7 +29,14 @@ export class InfoTracerAdapter implements BrokerAdapter {
   readonly method = "form" as const;
   readonly searchUrl = "https://infotracer.com/";
   readonly optOutUrl = "https://infotracer.com/optout";
+  readonly searchFields = ["firstName", "lastName", "addresses"] as const;
   readonly requiredFields = [] as const;
+
+  async search(_page: Page, _minimalProfile: Partial<PiiProfile>): Promise<SearchCandidate[]> {
+    // HTTP 200 exposes the form, but the live dummy submission returned 400
+    // before any result listing; fail closed rather than inventing a record.
+    return [];
+  }
 
   async optOut(page: Page, _profile: Partial<PiiProfile>): Promise<RemovalResult> {
     const timestamp = new Date().toISOString();
@@ -43,7 +48,7 @@ export class InfoTracerAdapter implements BrokerAdapter {
     const bodyText = await page.locator("body").innerText().catch(() => "");
     const humanVerification = /are you human|extra human verification/i.test(bodyText);
 
-    if ((await challengeForm.count()) > 0 && (await botTokenField.count()) > 0 || humanVerification) {
+    if (((await challengeForm.count()) > 0 && (await botTokenField.count()) > 0) || humanVerification) {
       return {
         broker: this.brokerId,
         status: "requires_manual_verification",
