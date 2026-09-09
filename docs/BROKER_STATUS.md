@@ -266,3 +266,52 @@ keep re-verifying once its current CloudFront 403 clears, since it's the
 one broker confirmed (this session) to have a real, code-level Turnstile
 integration point. No further broker-status changes made this round beyond
 documenting these live findings.
+
+## Round 6 — real Spokeo search-result parsing (2026-09-09)
+
+**Spokeo now has real, live-verified search()**, the second broker (after
+Advanced Background Checks) to move off `requires_manual_verification` for
+search. Direct Playwright navigation to any spokeo.com URL still returns a
+flat HTTP 403 in this project's runtime (confirmed unchanged during Round
+5's survey), but — same pattern proven for ABC — a FlareSolverr raw-fetch of
+`https://www.spokeo.com/{First}-{Last}` cleared cleanly: FlareSolverr itself
+reported "Challenge not detected!" and returned a real, fully-populated
+results page (a live capture, 70,726 matches for "John Smith", saved as
+`src/brokers/__fixtures__/spokeo-john-smith.html`).
+
+Card structure (verified against the real fixture, not guessed):
+`<div role="listitem">` per person, `<h3><a href="/John-Smith/{State}/{City}/{id}">
+{Name}, Age {N}</a></h3>`, a `"Resides in {City}, {ST}"` / `"Resided in
+{City}, {ST}"` heading (both wordings occur — the latter for deceased
+listings), and a `Relatives:` label followed by sibling `<a>` tags.
+`parseSpokeoResults()` (cheerio-based, 7 TDD tests) extracts all of this.
+
+**Two real bugs found and fixed via TDD, not caught by a naive
+implementation:**
+1. The "Resides in" vs "Resided in" wording differs by listing (deceased vs
+   living) — an initial regex anchored to only one wording silently dropped
+   city/state for roughly half of real candidates.
+2. A naive "find all `<a>` tags near the Relatives label" selector picked up
+   the candidate's own name link too (it lives in the same wrapping `<div>`
+   in the real markup), so the first relative extracted was always the
+   listing's own name (self-referential). Fixed by walking only the actual
+   sibling elements immediately after the `Relatives:` label span, not the
+   whole shared container. Both bugs now have permanent regression tests.
+
+Live end-to-end verified through the real `SpokeoAdapter.search()` class
+(not just the standalone parser) against a live self-hosted FlareSolverr
+instance: 30 real candidates returned, including correct 2-letter state
+codes and relative names with no self-inclusion. `search()` fails closed to
+`[]` if `FLARESOLVERR_URL` is unset or the fetch is still challenged — same
+convention as ABC.
+
+**Not yet done:** `optOut()` is unchanged — Spokeo's opt-out flow still
+requires a broker-issued listing URL per profile that a `PiiProfile` alone
+cannot supply, so opt-out remains `requires_manual_verification` even
+though search now works. A future improvement could thread a matched
+candidate's `candidateId` (the profile URL path) from `search()` into
+`optOut()` via the engine, but that's a real design change to
+`runRemoval()`'s interface, not done here — documented as a gap, not
+silently left unexplained.
+
+83 → 90 core tests. Lint/typecheck/build clean.
