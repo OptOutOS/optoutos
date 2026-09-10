@@ -51,7 +51,7 @@ methods per broker, not just opt-out forms.
 | That'sThem | form | `requires_manual_verification` | Real form fields verified (`#name #street #city #state #zip #email #phone`). Cloudflare Turnstile challenge served to automated browsers; adapter detects and fails closed, per no-CAPTCHA-solving policy. |
 | Advanced Background Checks | form | `requires_manual_verification` | Direct name/email opt-out form found (`#mode #sfn #smn #sln #semail`), protected by reCAPTCHA. Fails closed. |
 | BeenVerified | form | `requires_manual_verification` | Both search/opt-out routes redirect to a JS app shell exposing hCaptcha/Cloudflare Turnstile markers. No selectors guessed. |
-| CheckPeople | form | `failed` (stale — see Round 10) | Adapter still hard-codes `search() -> []` on an old "IP-banned" assumption, but posture is confirmed genuinely fluctuating (reachable end-to-end via plain curl 2026-09-10 10:35, then Cloudflare-challenged again ~1h later). See Round 10 and `docs/checkpeople-reachability.md` for the full endpoint spec captured while it was open. Adapter should re-probe live per-session, not hard-code either extreme. |
+| CheckPeople | form | `requires_manual_verification` (Round 11 — real search implemented, re-probes live) | `search()` now performs a real synthetic-identity search against the live site (plain HTTP, no Playwright/FlareSolverr needed) and correctly detects the verified no-match signal. It re-probes live on every call rather than caching a fixed reachability verdict, since the site's anti-bot posture is confirmed to genuinely fluctuate (see Round 10/11). `optOut()` still fails closed — no opt-out form structure has been live-verified yet. |
 | InfoTracer | form | `failed` / `requires_manual_verification` | "Are you human?" interactive gate observed; adapter detects known gate markers and fails closed. One test run hit a different rate-limit page and returned `failed` — consistent with the honest-uncertainty design, not a fabricated pass. |
 | Intelius | — (login-gated) | `requires_manual_verification` | The suppression flow (`suppression.peopleconnect.us`) is a login-gated SPA requiring an account/session. No anonymous opt-out path or public API exists. Adapter intentionally does not create accounts or attempt login. |
 | PublicDataUSA | — | `failed` (domain unreachable) | `publicdatausa.com` returns DNS SERVFAIL from both the local resolver and 1.1.1.1 — the domain itself appears dead, independent of this network's filtering. Placeholder adapter documents this rather than silently omitting the broker. |
@@ -529,3 +529,45 @@ direction; misaligned chains (BeenVerified full adapter build ahead of an
 undecided account-gating policy; Whitepages chain assuming a solver can
 fix an IP-level block) addressed separately — see DESIGN.md decision #9
 and the board itself for the resulting blocks/edits.
+
+## Round 11 — CheckPeople real search implemented (TDD), live-verified
+(2026-09-10)
+
+Following Round 10's finding, implemented `CheckPeopleAdapter.search()` for
+real, replacing the old hard-coded `[]`. TDD: `checkpeople.test.ts` written
+first (4 tests, RED confirmed — `checkPeopleHasNoMatch` didn't exist yet),
+then implemented against two real captured fixtures
+(`__fixtures__/checkpeople-home.html`, `__fixtures__/checkpeople-no-match.html`)
+independently re-verified live before writing any code (not just trusting
+the Round 10 doc): reproduced the exact same homepage → CSRF-token scrape
+→ `POST /landing` → `GET .../results` sequence via plain `curl`, got the
+exact same `searchId` prefix format and empty-result modal, confirming the
+Round 10 finding still held at implementation time.
+
+**Design decisions:**
+- Plain `fetch()`, no Playwright/FlareSolverr — the whole flow is
+  server-rendered HTML over ordinary HTTP, nothing here needs a browser.
+- Only sends `firstName`/`lastName` (+ `city` if known) — the broker's own
+  search form requires no more, per the project's minimal-PII-search
+  principle.
+- `checkPeopleHasNoMatch()` only recognizes the verified empty-result
+  modal signal (`#modifySearchModal` "No results found"), never the
+  generic "10+ Results" marketing headline (present even for zero real
+  matches — see Round 10). No positive-match card parser exists yet: a
+  real result card's structure has never been observed live (this
+  project's verification policy forbids probing with a real person's
+  name), so any non-empty-non-recognized shape fails closed to `[]`
+  rather than guessing at candidate fields.
+- `search()` re-probes live on every call — no caching, no hard-coded
+  verdict — consistent with Round 10's finding that posture fluctuates.
+
+**Live-verified end-to-end**, not just the fixture-based unit tests: built
+the adapter, ran `search()` against the real live site with the same
+synthetic identity, got the real `[]` no-match result over an actual
+network round-trip matching the manual `curl` reproduction. `optOut()`
+unchanged (still fails closed — no opt-out form structure verified yet).
+
+Full clean-install verification: `rm -rf node_modules package-lock.json &&
+npm install` succeeds with 0 vulnerabilities; both packages
+lint/typecheck/build/test clean. **124 → core tests, 174 total (124 core +
+50 CLI).**
