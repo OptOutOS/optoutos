@@ -123,6 +123,15 @@ outcomes a user would judge this tool on don't exist yet for most brokers.
    fail-closed/verification-discipline rules every adapter must follow.
    Written from 7+ real adapters, not speculatively in advance of having
    any.
+9. **Web GUI** — 🔶 started (2026-09-10). The project's original priority
+   order ("Privacy, Security, Intuitive UI," stated before any code
+   existed) had its third leg unaddressed for the entire backend-build
+   phase — flagged directly by the user, not caught proactively. First
+   slice shipped: `apps/web` (Fastify local-only server) with unlock/lock
+   session endpoints implementing the BWS-primary/passphrase-fallback
+   policy (see DESIGN.md decision 12). **Not yet built:** household
+   management UI (issue #13), broker-status dashboard (issue #14), run
+   control with a mandatory search-only default (issue #15).
 
 ## Scope policy: no broker is dropped for its shape (2026-09-10)
 

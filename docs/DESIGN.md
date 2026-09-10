@@ -233,6 +233,53 @@ adapter's bypass code to run if one exists. Adapters must never implement
 flaw; only a genuinely free, verified data path qualifies (same
 verify-before-shipping discipline as every other adapter in this project).
 
+### 12. Web GUI: local web app first, Tauri wrapper deferred (2026-09-10)
+
+The project's very first stated priority order (2026-09-09, before any
+code existed) was **"Privacy, Security, Intuitive UI."** The third leg had
+gone unaddressed through 12+ rounds of backend/adapter work — a real,
+fair gap flagged directly by the user rather than caught proactively.
+
+**Decision (grilled first, user-confirmed):** build a **local web app**
+(`apps/web`, Fastify + vanilla JS, no framework/build-step yet) rather
+than a native desktop app (Electron/Tauri) as the FIRST GUI increment.
+Rationale:
+- Zero new language/toolchain risk — reuses the exact TS stack already in
+  the monorepo. A Tauri shell would mean introducing Rust; Electron would
+  mean shipping a full Chromium+Node runtime (150-200MB, larger attack
+  surface) for a privacy-focused tool.
+- Fits this project's proven incremental-TDD cadence far better than a
+  desktop app's inherently lumpier packaging/installer/code-signing work.
+- The door stays open: a working local web UI can be wrapped in Tauri
+  later with comparatively little rework (Tauri can point at the same
+  local server), so nothing here is wasted if a desktop wrapper is wanted
+  down the line.
+
+**Unlock policy (user decision, verbatim: "BWS-backed unlock as the
+primary path, in-memory prompt as a fallback for users without
+Bitwarden"):** implemented as `packages/core/src/web/unlock.ts` —
+`resolveUnlockSource()` picks BWS mode only when BOTH `BWS_ACCESS_TOKEN`
+and an explicit `OPTOUTOS_BWS_SECRET_ID` are present (a bare token alone
+isn't enough to safely default into BWS mode); otherwise falls back to
+`InMemoryPassphraseSession`, which holds a passphrase ONLY in process
+memory, is never logged (redacted `toString`/`toJSON`), and auto-expires
+after 15 minutes idle.
+
+**Security posture:** the server binds to `127.0.0.1` only — never
+`0.0.0.0` — matching the CLI's local-first trust model exactly. No
+remote-access mode is planned; a user wanting remote access is expected
+to use their own VPN/SSH tunnel, same as any other localhost-only admin
+tool.
+
+**Scope of this first slice:** unlock/session endpoints only
+(`GET /api/unlock/status`, `POST /api/unlock`, `POST /api/lock`). No
+household management, dashboard, or run control yet — those are separate,
+later slices tracked in `docs/ROADMAP.md`. Per user decision, run control
+will always expose a search-only (dry-run) mode as the default,
+undismissable option — the GUI must never make submitting a real removal
+easier to trigger accidentally than the CLI's explicit `--execute` flag
+already prevents.
+
 ## Storage backends
 
 Two implementations of one `PeopleStore` interface

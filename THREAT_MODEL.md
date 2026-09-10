@@ -74,18 +74,51 @@ mechanism — including clearing whatever anti-bot gate stands in front of
 it — is within scope for a tool whose sole purpose is exercising a data
 subject's own opt-out right, as distinct from bulk/malicious scraping.
 
-**Still a hard line, unchanged:** no third-party paid CAPTCHA-solving
-service (2Captcha, CapSolver, Scrappey, etc.) — those require sending the
-challenge (and often site/traffic metadata) to an external company, which
-is a real trust boundary this project does not cross. Only real-browser,
-locally-run solvers (e.g. a self-hosted [EzSolver](https://github.com/ismoiloffS/EzSolver)-
-or [Theyka/Turnstile-Solver](https://github.com/Theyka/Turnstile-Solver)-style
-service, following the same self-hosted-HTTP-service pattern already used
-for FlareSolverr) are in scope. If no reliable solver exists for a given
-challenge type at all (e.g. an anti-bot vendor this project has no working
-solver for), the adapter must fail closed to `requires_manual_verification`
-— never guess, never fabricate a submission, never retry indefinitely
-against a challenge it cannot actually clear.
+- **Still a hard line, unchanged:** no third-party paid CAPTCHA-solving
+  service (2Captcha, CapSolver, Scrappey, etc.) — those require sending the
+  challenge (and often site/traffic metadata) to an external company, which
+  is a real trust boundary this project does not cross. Only real-browser,
+  locally-run solvers (e.g. a self-hosted [EzSolver](https://github.com/ismoiloffS/EzSolver)-
+  or [Theyka/Turnstile-Solver](https://github.com/Theyka/Turnstile-Solver)-style
+  service, following the same self-hosted-HTTP-service pattern already used
+  for FlareSolverr) are in scope. If no reliable solver exists for a given
+  challenge type at all (e.g. an anti-bot vendor this project has no working
+  solver for), the adapter must fail closed to `requires_manual_verification`
+  — never guess, never fabricate a submission, never retry indefinitely
+  against a challenge it cannot actually clear.
+
+## reCAPTCHA v2 (self-hosted, puzzle-solving) is in scope; v3 is undecided
+(2026-09-10)
+
+Found while re-surveying ABC and USPhonebook (both blocked on real
+reCAPTCHA, no solver existed): reCAPTCHA solving is a MEANINGFULLY
+DIFFERENT category of "solve" than Turnstile, and the distinction was
+surfaced to the user explicitly before building anything, rather than
+assumed to be equivalent.
+
+- **Turnstile (existing solver, thatsthem.ts):** the solver drives a real
+  browser; Cloudflare's own widget decides "this looks like a genuine
+  human session" and passes it. Closer to "behave authentically" than
+  "defeat a puzzle."
+- **reCAPTCHA v2 (checkbox/image/audio challenges):** free/self-hosted
+  options (e.g. YOLO-based vision-model image solvers, Buster-style audio
+  solvers) actually DEFEAT the underlying challenge puzzle — a materially
+  more aggressive technique, closer to what CAPTCHAs specifically exist to
+  stop.
+- **reCAPTCHA v3 (invisible, behavioral trust score):** free approaches
+  rely on a real, aged, logged-in Google account accumulating trust over
+  time — a persistent Google identity tied to this project's automation,
+  a different infrastructure commitment than anything else OptOutOS does.
+
+**Decision (user, verbatim):** "Yes — image/audio puzzle-solving (vision
+models / Buster-style) is fine, same spirit as Turnstile: get past the
+gate to submit our own real opt-out request, nothing malicious." **v2
+image/audio puzzle-solving is in scope.** v3's persistent-Google-account
+requirement was NOT explicitly cleared — treat as undecided/out of scope
+until a separate explicit decision is made, should a v3-gated broker come
+up. Paid third-party solving services remain hard-forbidden regardless of
+CAPTCHA version — this decision only concerns free, self-hosted,
+real-browser-driven solving.
 
 ## Payment paywalls are NOT anti-bot, and are not bypassed by default
 (2026-09-10)

@@ -27,3 +27,4 @@ export * from "./people/household-matching.js";
 export * from "./logging/run-logger.js";
 export * from "./scheduling/scheduler.js";
 export * from "./scheduling/run-scheduled.js";
+export * from "./web/unlock.js";

@@ -1,0 +1,24 @@
+{
+  "name": "@optoutos/web",
+  "version": "0.0.1",
+  "description": "Local-only web GUI for OptOutOS — household management, broker status, and run control, served on localhost.",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "optoutos-web": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "rslint src",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@optoutos/core": "*",
+    "fastify": "^5.2.0",
+    "playwright": "^1.47.0"
+  }
+}
