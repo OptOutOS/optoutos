@@ -147,16 +147,20 @@ result, only found by manually noticing a stray `.worktrees/` directory.
 **Decision:** `kanban complete` produces no merge-to-main action on its own
 (confirmed by inspecting every `hermes kanban` subcommand — none touch git
 remotes), and merging a worker's branch should stay a deliberate,
-human-verified step for a PII-handling repo regardless. So the fix is at
-the review gate, not a new merge automation: every content-producing worker
+human-verified step regardless — this project's standing bar for any
+change (see CONTRIBUTING.md: TDD, real clean-install verification, live
+smoke-tests). So the fix is at the review gate, not a new merge
+automation: every content-producing worker
 profile's persistent description (`hermes profile describe <name> --text
 ...`, injected as standing context into every task that profile runs) now
 instructs it to call `kanban request-review` instead of `kanban complete`.
 A human (or the `optoutos-orchestrator` profile, invoked manually) approves
 via the review flow; only after that does a human run the actual `git
 merge` + full clean-install verification + push — the same verification
-this repo's CONTRIBUTING.md already requires for any change. See GitHub
-issue #10 (closed) for the full investigation.
+this repo's CONTRIBUTING.md already requires for any change. (This gate is
+about code-quality/correctness review, not PII exposure — the repo itself
+never contains PII; see THREAT_MODEL.md.) See GitHub issue #10 (closed)
+for the full investigation.
 
 **Cost-consciousness applies to this board specifically:** before resuming
 dispatch on `ready`/`todo` tasks, weigh the batch size and LLM cost
