@@ -146,6 +146,15 @@ same locked/unlocked gate as the existing routes
 (`resolveHouseholdStore()` in `apps/web/src/server.ts`) — there is no
 "trusted" caller that skips it.
 
+## CI
+
+`.github/workflows/ci.yml` runs one job per package (`core`, `cli`,
+`web`) — all three are required status checks on `main`'s branch
+protection. If you add a new `apps/*` or `packages/*` package, add its CI
+job AND its required-status-check context in the same PR — `apps/web`
+went unmonitored by CI for its first four merges to `main` because this
+step was missed when the package was created.
+
 ## Kanban board (`optoutos`)
 
 `kanban.dispatch_in_gateway` is deliberately kept `false` for cost
