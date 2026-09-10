@@ -12,7 +12,10 @@ packages/core     — broker registry, removal engine, PII-source abstraction,
                      multi-person household store, Playwright/FlareSolverr
                      adapters (shared by every surface)
 apps/cli          — local-first CLI client (built, working)
-apps/desktop      — (planned) GUI for non-technical self-hosters
+apps/web          — local-only web GUI (Hono; built, working — unlock,
+                     household management, broker-status dashboard)
+apps/desktop      — (planned) native wrapper, deferred in favor of the
+                     web GUI (see "Web GUI" decision below)
 apps/cloud        — (scaffolded, de-scoped) Terraform + Lambda for
                      self-hosted scheduled runs — see "Local-first pivot" below
 ```

@@ -26,10 +26,11 @@ principle from day one.
 ```
 packages/core     — broker registry, removal engine, PII-source abstraction,
                      Playwright adapters, evidence logging (shared by every surface)
-apps/cli          — local-first CLI client (spike target), cron-friendly
-apps/desktop      — (planned) Tauri/Electron GUI for non-technical self-hosters
-apps/cloud        — (planned) Terraform + Lambda container for unattended
-                     self-hosted scheduled runs in your own AWS account
+apps/cli          — local-first CLI client (built, working)
+apps/web          — local-only web GUI (Hono; built, working)
+apps/desktop      — (planned) native wrapper, deferred in favor of the web GUI
+apps/cloud        — (scaffolded, de-scoped) Terraform + Lambda container for
+                     self-hosted scheduled runs — see docs/DESIGN.md "Local-first pivot"
 ```
 
 Two deployment modes, one engine:
@@ -65,9 +66,19 @@ See `packages/core/src/brokers/` for the per-broker config/adapter status.
 
 ## Status
 
-🚧 Pre-alpha spike. First goal: prove the removal pipeline end-to-end against
-ClustrMaps (form-based opt-out), then validate against a harder anti-bot target
-(Whitepages/Spokeo).
+🚧 Working spike / pre-alpha with a hardened core — not yet an MVP. 3/12
+brokers have real, live-verified search; a local web GUI (unlock,
+household management, broker-status dashboard) is built; zero real
+removal submissions have completed end to end yet. See
+[docs/ROADMAP.md](docs/ROADMAP.md) for the honest current state and
+priorities, and the [wiki's Project Status & MVP page](https://github.com/OptOutOS/optoutos/wiki/Project-Status-and-MVP)
+for a human-readable summary.
+
+## Contributing
+
+See [AGENTS.md](AGENTS.md) for the development guide (architecture,
+layering rules, verification discipline, what's in/out of scope) —
+written for AI coding assistants and human contributors alike.
 
 ## License
 
