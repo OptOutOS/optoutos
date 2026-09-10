@@ -168,6 +168,27 @@ explicitly rather than assuming "more parallel workers" is better — this
 was the original reason the board is paused, and that reasoning doesn't
 go away just because a review gate now exists.
 
+### 10. No broker is dropped for its shape — deprioritize by effort, never
+exclude by scope (2026-09-10)
+Every target broker gets *some* handling path, even if today that's
+"documented as correctly failing closed" rather than a working adapter.
+This was tested directly against BeenVerified (account-gated: no opt-out
+form is reachable without logging into a third-party account) — the kanban
+board's task chain for it was found hard-blocked pending an unresolved
+scope question (see GitHub issue #11, closed).
+
+**Decision:** account-gating, email-only confirmation, manual-only identity
+flows, or any other unusual shape are **prioritization signals, not
+exclusion criteria.** A broker with high implementation effort or an
+awkward mechanism queues behind lower-effort/higher-yield brokers in
+ROADMAP.md's priority order — it is never permanently dropped from scope
+for being a different shape. The narrower question of *how* to eventually
+automate a specific hard case (e.g., does OptOutOS ever accept a
+user-supplied already-authenticated session/cookie for BeenVerified,
+versus staying manual-only for that one mechanism while the broker itself
+stays in scope) is deferred to when that broker's turn actually comes up in
+priority order, not decided speculatively now.
+
 ## Storage backends
 
 Two implementations of one `PeopleStore` interface

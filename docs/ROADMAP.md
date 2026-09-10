@@ -99,8 +99,26 @@ outcomes a user would judge this tool on don't exist yet for most brokers.
    separate non-PII JSONL audit log, and docs/SCHEDULING.md covering
    cron/Task Scheduler setup.
 6. **Email-based removal path** — last-resort fallback for brokers where no
-   technical bypass path exists at all (e.g. IP-banned, or account-gated
-   like BeenVerified where creating a third-party account is out of scope).
+   technical bypass path exists at all (e.g. IP-banned brokers). Note: this
+   is a *mechanism*, not a scope decision — see the scope policy below.
+7. **BeenVerified (account-gated)** — deprioritized by level of effort, not
+   out of scope (policy decided 2026-09-10, GitHub issue #11 closed): every
+   broker stays on the roadmap regardless of shape, but account-gated
+   brokers queue behind lower-effort/higher-yield ones. When this comes up
+   in priority order, the open design question is *how* — e.g. whether
+   OptOutOS ever accepts a user-supplied already-authenticated
+   session/cookie, versus staying permanently manual-only for this specific
+   broker while remaining "in scope."
+
+## Scope policy: no broker is dropped for its shape (2026-09-10)
+
+Every one of the 12 target brokers gets *some* handling path — even if
+today that path is "documented as correctly failing closed," not a working
+adapter. Brokers with unusual constraints (account-gating, email-only
+confirmation, manual-only identity flows) are **deprioritized by level of
+effort, never permanently excluded** for being a different shape. See
+GitHub issue #11 (closed) for the specific BeenVerified case this policy
+was decided against.
 
 ## Deferred / explicitly out of scope for now
 
@@ -112,11 +130,6 @@ outcomes a user would judge this tool on don't exist yet for most brokers.
   (see DESIGN.md), but the backup/rotation *runbook* for users is not yet
   written. Should exist before recommending this to anyone non-technical.
 - Packaged distribution (npm publish, binary, Docker image).
-- **Account-gated brokers (BeenVerified)** — no policy exists yet for
-  whether/how OptOutOS should ever handle a broker that requires the user's
-  own account login to reach opt-out. Currently out of scope entirely
-  (fails closed); would need an explicit policy decision, not just code,
-  before any work here.
 
 ## Process gaps worth closing (not code, but real risk)
 
