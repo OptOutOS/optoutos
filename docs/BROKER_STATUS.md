@@ -51,7 +51,7 @@ methods per broker, not just opt-out forms.
 | That'sThem | form | `requires_manual_verification` | Real form fields verified (`#name #street #city #state #zip #email #phone`). Cloudflare Turnstile challenge served to automated browsers; adapter detects and fails closed, per no-CAPTCHA-solving policy. |
 | Advanced Background Checks | form | `requires_manual_verification` | Direct name/email opt-out form found (`#mode #sfn #smn #sln #semail`), protected by reCAPTCHA. Fails closed. |
 | BeenVerified | form | `requires_manual_verification` | Both search/opt-out routes redirect to a JS app shell exposing hCaptcha/Cloudflare Turnstile markers. No selectors guessed. |
-| CheckPeople | form | `requires_manual_verification` (Round 11 — real search implemented, re-probes live) | `search()` now performs a real synthetic-identity search against the live site (plain HTTP, no Playwright/FlareSolverr needed) and correctly detects the verified no-match signal. It re-probes live on every call rather than caching a fixed reachability verdict, since the site's anti-bot posture is confirmed to genuinely fluctuate (see Round 10/11). `optOut()` still fails closed — no opt-out form structure has been live-verified yet. |
+| CheckPeople | form | `failed` (dry-run, honest limitation — Round 12) | `search()` performs a real live navigation (homepage → CSRF token → `POST /landing` → `GET .../results`, re-verified live on every call) but always returns `[]`: CheckPeople's free-tier results page carries no reliable match/no-match signal (see Round 12 — Round 11's detector was found to be a real bug and reverted). `optOut()` still fails closed — no opt-out form structure has been live-verified yet. |
 | InfoTracer | form | `failed` / `requires_manual_verification` | "Are you human?" interactive gate observed; adapter detects known gate markers and fails closed. One test run hit a different rate-limit page and returned `failed` — consistent with the honest-uncertainty design, not a fabricated pass. |
 | Intelius | — (login-gated) | `requires_manual_verification` | The suppression flow (`suppression.peopleconnect.us`) is a login-gated SPA requiring an account/session. No anonymous opt-out path or public API exists. Adapter intentionally does not create accounts or attempt login. |
 | PublicDataUSA | — | `failed` (domain unreachable) | `publicdatausa.com` returns DNS SERVFAIL from both the local resolver and 1.1.1.1 — the domain itself appears dead, independent of this network's filtering. Placeholder adapter documents this rather than silently omitting the broker. |
@@ -571,3 +571,43 @@ Full clean-install verification: `rm -rf node_modules package-lock.json &&
 npm install` succeeds with 0 vulnerabilities; both packages
 lint/typecheck/build/test clean. **124 → core tests, 174 total (124 core +
 50 CLI).**
+
+## Round 12 — Round 11's no-match detector was a real bug; corrected (2026-09-10)
+
+The user gave explicit permission to probe search with generic/common
+names ("You can def probe search with generic names. Just never
+`optOut()` without real intent to remove data.") — this immediately paid
+off. Round 11's `checkPeopleHasNoMatch()` used the `#modifySearchModal`
+"No results found" text as the no-match signal, verified only against a
+synthetic identity ("Zaphod Beeblebrox") guaranteed to have zero real
+matches.
+
+Re-probing live with a real common name ("John Smith") and diffing the
+two `/results` responses line-by-line found they are **byte-for-byte
+structurally identical** apart from the name itself — same "We found 10+
+Results" headline, same `#modifySearchModal` "No results found" markup,
+same "Preparing to build report" loading shell, same forced 4-second
+client-side JS redirect into a paid report/checkout funnel
+(`open-report/step1-opening`, which contains `credit`/`checkout` markup —
+not explored further; this project does not simulate a purchase).
+
+**Conclusion: CheckPeople's free-tier `/results` page carries no match/
+no-match signal at all.** It is a generic pre-loader/paywall-teaser shell
+served identically regardless of actual result count; the real result
+data (if any) is gated behind checkout. Round 11's detector was
+confidently wrong — worse than the pre-Round-11 honest `[]` stub, because
+it *looked* implemented and verified while actually reporting "no match"
+unconditionally, for any query, real or synthetic.
+
+**Fix:** `checkPeopleHasNoMatch()` now always returns `false` (documented
+as a permanent limitation, not a bug to fix later) and `search()` always
+returns `[]`, but the real live navigation is still performed on every
+call so reachability continues to be genuinely re-verified rather than
+assumed. Tests rewritten as regression tests locking in the corrected
+behavior against both the synthetic fixture and the real John Smith
+response shape. Full sweep re-run clean.
+
+This is exactly the failure mode "verify, don't assume" exists to catch,
+and it worked — the fix landed within the same session because the user's
+own probing permission surfaced it immediately, before it could ship
+further or mislead a future session into trusting a broken detector.

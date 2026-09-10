@@ -2,32 +2,38 @@ import type { Page } from "playwright";
 import type { PiiProfile } from "../pii.js";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
 import type { SearchCandidate } from "./matching.js";
-import * as cheerio from "cheerio";
 
 /**
- * Detects CheckPeople's real "no match" signal on a results page.
+ * CheckPeople does not expose a way to distinguish "match" from
+ * "no match" without going past a paywall.
  *
- * WHY THIS EXISTS (verified live 2026-09-10, see
- * docs/checkpeople-reachability.md for the full navigation sequence): the
- * results page ALWAYS renders a generic "We found 10+ Results for {name}"
- * marketing headline, even for a synthetic identity with zero real
- * matches — that headline text must never be treated as a match-count
- * signal. The real "no results" indicator is a hidden Bootstrap modal
- * present in the SAME page load:
- *   <div class="modal ... " id="modifySearchModal">
- *     <h4 class="modal-title">No results found. Please refine your search</h4>
- *   ...
- * This function returns true only when that modal's "No results found"
- * text is present. It does not attempt to parse individual result cards —
- * a positive-match page's card structure has not yet been observed live
- * (this project's verification policy deliberately never probes with a
- * real person's name), so no result-row parser exists here yet; only the
- * empty-result signal is safe to rely on today.
+ * WHY THIS EXISTS (real bug found and reverted, 2026-09-10): the initial
+ * Round 11 implementation used the `#modifySearchModal` "No results
+ * found" text as the no-match signal. That was WRONG. Direct comparison
+ * confirmed the `#modifySearchModal` markup, the "We found 10+ Results"
+ * headline, and the entire `/results` page shell are **byte-for-byte
+ * identical** for a synthetic no-match identity ("Zaphod Beeblebrox")
+ * and a real common name ("John Smith") -- diffed directly, 0
+ * structural differences beyond the name itself. The modal is a static
+ * "refine your search" UI element present unconditionally, not a
+ * match-count signal.
+ *
+ * Following that page's own client-side JS: it forces a redirect after
+ * ~4 seconds to `/open-report/step1-opening`, which leads into a paid
+ * report/checkout funnel (`credit`, `checkout` markup observed). No
+ * genuine free-tier match/no-match signal was found short of that
+ * paywall, and this project does not simulate a purchase to probe
+ * further.
+ *
+ * This function is therefore permanently unable to return a reliable
+ * verdict from the `/results` HTML alone and always returns false
+ * (never claims "no match" from data that can't support that claim).
+ * search() below does not call this to gate anything -- it fails closed
+ * to [] unconditionally, same as before Round 11, but now for the
+ * correct, verified reason.
  */
-export function checkPeopleHasNoMatch(html: string): boolean {
-  const $ = cheerio.load(html);
-  const modalText = $("#modifySearchModal .modal-title").first().text();
-  return /no results found/i.test(modalText);
+export function checkPeopleHasNoMatch(_html: string): boolean {
+  return false;
 }
 
 /**
@@ -38,8 +44,9 @@ export function checkPeopleHasNoMatch(html: string): boolean {
  * scrape Laravel CSRF _token -> POST /landing -> GET .../results, skipping
  * the transient .../searching redirect hop) completed cleanly via plain
  * HTTP requests with zero anti-bot challenges, reproduced independently
- * twice on 2026-09-10. See docs/checkpeople-reachability.md for the full
- * endpoint spec and captured cookies.
+ * three times on 2026-09-10 (once with a synthetic identity, once with a
+ * real common name "John Smith"). See docs/checkpeople-reachability.md
+ * for the full endpoint spec and captured cookies.
  *
  * HOWEVER, the posture is genuinely inconsistent, not simply "now open":
  * an independent re-check roughly an hour later hit a Cloudflare
@@ -55,15 +62,25 @@ export function checkPeopleHasNoMatch(html: string): boolean {
  * flow. The previously inspected opt-out URL was separately blocked by
  * the same anti-bot boundary at that time.
  *
- * search() uses plain HTTP requests (no Playwright, no FlareSolverr) to
- * reproduce the verified flow: GET homepage for a fresh per-session CSRF
- * token and cookies, POST /landing with the synthetic query, then GET the
- * results page directly using the searchId from the POST's redirect
- * Location header (skipping the intermediate "searching" hop, which is a
- * transient status redirect with no content — verified live). If any step
- * doesn't behave as verified, or the CheckPeopleHasNoMatch signal can't be
- * read, this fails closed to [] — it never guesses at result rows, since
- * no positive-match card structure has been observed live yet.
+ * NO USABLE MATCH SIGNAL EXISTS ON THE FREE-TIER RESULTS PAGE (found and
+ * corrected 2026-09-10 — see checkPeopleHasNoMatch's docstring for the
+ * full comparison). The `/results` page CheckPeople returns is a generic
+ * pre-loader/paywall-teaser shell, byte-for-byte identical in structure
+ * whether the query has zero real matches or many. It forces a client-side
+ * JS redirect into a paid report/checkout funnel after ~4 seconds; this
+ * project does not simulate a purchase to see past that gate. Given that,
+ * search() below cannot honestly return either a positive match or a
+ * confirmed no-match from this broker today — it always returns [],
+ * documented as a known free-tier limitation rather than a solved
+ * reachability problem.
+ *
+ * search() still performs the real navigation (GET homepage for a fresh
+ * CSRF token/cookies, POST /landing with the synthetic query, GET the
+ * results page from the redirect's searchId, skipping the transient
+ * "searching" hop) so that reachability continues to be re-verified live
+ * on every call, and so this adapter is ready to return real candidates
+ * the moment a genuine free-tier match signal is found (e.g. if
+ * CheckPeople's product changes, or a different endpoint is discovered).
  */
 export class CheckPeopleAdapter implements BrokerAdapter {
   readonly brokerId = "checkpeople";
@@ -120,16 +137,13 @@ export class CheckPeopleAdapter implements BrokerAdapter {
       // page directly — skip the transient "searching" redirect hop
       // (verified live: it 302s again with no content of its own).
       const resultsUrl = location.replace("/searching", "/results");
-      const resultsRes = await fetch(resultsUrl, {
+      await fetch(resultsUrl, {
         headers: { "User-Agent": USER_AGENT, Cookie: cookies },
       });
-      if (!resultsRes.ok) return [];
-      const resultsHtml = await resultsRes.text();
-
-      // No positive-match card parser exists yet (never observed live —
-      // see class docstring). Only the verified no-match signal is safe
-      // to act on; any other shape fails closed rather than guessing.
-      if (checkPeopleHasNoMatch(resultsHtml)) return [];
+      // The navigation succeeding (or not) only confirms reachability;
+      // the response body carries no reliable match/no-match signal (see
+      // class docstring and checkPeopleHasNoMatch) — fail closed either
+      // way rather than guessing at candidate rows.
       return [];
     } catch {
       return [];
