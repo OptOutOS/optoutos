@@ -47,7 +47,7 @@ methods per broker, not just opt-out forms.
 
 | Broker | Method | Live Result | Notes |
 |---|---|---|---|
-| ClustrMaps | — | Not testable | `clustrmaps.com` is DNS-sinkholed to `0.0.0.0` by this network's UDM Pro (confirmed against 1.1.1.1 too — network-wide, not a local override). Deprioritized as spike target for this reason. |
+| ClustrMaps | — | Not testable | `clustrmaps.com` resolves (via DoH, bypassing local sinkholing) to `5.39.10.93`, but that IP serves Imena.ua's registrar parking page on port 80 for every path (homepage, opt-out route, and a random nonexistent path all byte-identical) and resets the TLS handshake on port 443 before any content is served — re-verified live 2026-09-10. The ClustrMaps application itself is not being served from this domain/IP; no adapter can be built until the site is reachable again. No selectors invented. |
 | That'sThem | form | `requires_manual_verification` | Real form fields verified (`#name #street #city #state #zip #email #phone`). Cloudflare Turnstile challenge served to automated browsers; adapter detects and fails closed, per no-CAPTCHA-solving policy. |
 | Advanced Background Checks | form | `requires_manual_verification` | Direct name/email opt-out form found (`#mode #sfn #smn #sln #semail`), protected by reCAPTCHA. Fails closed. |
 | BeenVerified | form | `requires_manual_verification` | Both search/opt-out routes redirect to a JS app shell exposing hCaptcha/Cloudflare Turnstile markers. No selectors guessed. |
