@@ -1,6 +1,22 @@
 import { randomUUID } from "node:crypto";
-import type { PeopleStore, PersonRecord, RelationshipType } from "@optoutos/core";
-import type { PersonFieldsInput } from "./args.js";
+import type { PeopleStore } from "./store.js";
+import type { PersonRecord, RelationshipType } from "./types.js";
+
+/**
+ * Fields accepted for creating/editing a PersonRecord — shared by both the
+ * CLI (apps/cli/src/args.ts) and the web GUI (apps/web), which each have
+ * their own way of collecting these (flags vs a form) but must funnel into
+ * this one implementation so household mutation logic isn't duplicated.
+ */
+export interface PersonFieldsInput {
+  firstName?: string;
+  lastName?: string;
+  emails?: string[];
+  phones?: string[];
+  addresses?: { street: string; city: string; state: string; zip: string }[];
+  dateOfBirth?: string;
+  notes?: string;
+}
 
 export async function addPerson(
   store: PeopleStore,

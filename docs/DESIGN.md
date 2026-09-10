@@ -241,7 +241,7 @@ gone unaddressed through 12+ rounds of backend/adapter work — a real,
 fair gap flagged directly by the user rather than caught proactively.
 
 **Decision (grilled first, user-confirmed):** build a **local web app**
-(`apps/web`, Fastify + vanilla JS, no framework/build-step yet) rather
+(`apps/web`, vanilla JS, no frontend framework/build-step yet) rather
 than a native desktop app (Electron/Tauri) as the FIRST GUI increment.
 Rationale:
 - Zero new language/toolchain risk — reuses the exact TS stack already in
@@ -254,6 +254,33 @@ Rationale:
   later with comparatively little rework (Tauri can point at the same
   local server), so nothing here is wasted if a desktop wrapper is wanted
   down the line.
+
+**Backend framework: Hono, not Fastify (corrected 2026-09-10 same day).**
+Fastify was picked first WITHOUT doing a real comparison — a process gap
+the user caught directly ("Did we do a comparison of fastfy vs others?").
+Comparison done retroactively, then acted on:
+| | Hono | Fastify |
+|---|---|---|
+| Schema validation | Pairs naturally with `zod`, which this codebase already uses everywhere (`PersonRecordSchema` etc.) | Own JSON-Schema-based validation, a second validation paradigm alongside the zod already in use |
+| TypeScript route typing | Designed TS-first, ergonomic | Generic-parameter style (`app.post<{Body: X}>()`), workable but secondary |
+| Runtime portability | Runs on Node/Deno/Bun/Workers — relevant if a future deployment shape changes | Node-only |
+| Footprint | Very small | Small |
+
+Switched same-day; all 18 tests (unlock/session + static + household
+routes) rewritten against Hono's `app.request()` test API and passed
+before/after with identical behavior — a real regression-free swap, not
+an assumed one.
+
+**Dependency security discipline applied to the swap:** both `hono` and
+`@hono/node-server` have real, recent CVE history (Windows-specific
+backslash path traversal in Hono core <4.12.25 — directly relevant since
+this project runs on Windows; a repeated-slash middleware bypass and an
+auth-bypass-via-inconsistent-URL-decoding bug in `@hono/node-server`
+<2.0.5/<1.19.15). Verified current npm versions (`hono@4.13.7`,
+`@hono/node-server@2.1.1`) are well past all three fixes before pinning;
+`npm audit` confirmed 0 vulnerabilities after install. Same standard
+already applied to `@fastify/static` earlier the same session, which also
+had real path-traversal CVEs in its own history.
 
 **Unlock policy (user decision, verbatim: "BWS-backed unlock as the
 primary path, in-memory prompt as a fallback for users without
@@ -271,14 +298,23 @@ remote-access mode is planned; a user wanting remote access is expected
 to use their own VPN/SSH tunnel, same as any other localhost-only admin
 tool.
 
-**Scope of this first slice:** unlock/session endpoints only
-(`GET /api/unlock/status`, `POST /api/unlock`, `POST /api/lock`). No
-household management, dashboard, or run control yet — those are separate,
-later slices tracked in `docs/ROADMAP.md`. Per user decision, run control
-will always expose a search-only (dry-run) mode as the default,
-undismissable option — the GUI must never make submitting a real removal
-easier to trigger accidentally than the CLI's explicit `--execute` flag
-already prevents.
+**Scope shipped this session:** unlock/session endpoints
+(`GET /api/unlock/status`, `POST /api/unlock`, `POST /api/lock`), full
+household CRUD (`GET/POST /api/people`, `GET/PATCH /api/people/:id`)
+against a `LocalEncryptedFileStore` (path via
+`OPTOUTOS_WEB_STORE_PATH`; BWS store selection for the web GUI itself is
+a fast-follow, not yet wired), and a minimal vanilla-JS frontend
+(`public/index.html` + `app.js` + `app.css`) serving both screens. Shared
+household-mutation logic (`addPerson`/`editPerson`/`listPeople`/
+`linkPeople`) was moved from `apps/cli` into `packages/core/src/people/
+person-commands.ts` so both the CLI and the web GUI use one
+implementation, not two — the CLI now imports it from `@optoutos/core`
+instead of a local copy. **Not yet built:** broker-status dashboard
+(issue #14), run control with a mandatory search-only default (issue
+#15). Per user decision, run control will always expose a search-only
+(dry-run) mode as the default, undismissable option — the GUI must never
+make submitting a real removal easier to trigger accidentally than the
+CLI's explicit `--execute` flag already prevents.
 
 ## Storage backends
 

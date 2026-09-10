@@ -1,75 +1,178 @@
-import Fastify, { type FastifyInstance } from "fastify";
-import { resolveUnlockSource, InMemoryPassphraseSession } from "@optoutos/core";
+import { Hono } from "hono";
+import { serve, type ServerType } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
+import { fileURLToPath } from "node:url";
+import { join, dirname } from "node:path";
+import {
+  resolveUnlockSource,
+  InMemoryPassphraseSession,
+  LocalEncryptedFileStore,
+  addPerson,
+  editPerson,
+  listPeople,
+  type PeopleStore,
+  type PersonFieldsInput,
+} from "@optoutos/core";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+// dist/server.js -> ../public (public/ sits next to src/ at the package root).
+const PUBLIC_DIR = join(__dirname, "..", "public");
 
 /**
  * OptOutOS web GUI server.
  *
+ * FRAMEWORK: Hono (+ @hono/node-server for the Node runtime, +
+ * @hono/node-server/serve-static for static assets). Switched from an
+ * initial Fastify pick after the user asked for a real comparison, which
+ * hadn't been done before choosing Fastify — see docs/DESIGN.md decision
+ * 12 for the full comparison table. Hono fits this project's existing
+ * conventions better (zod-first schema validation throughout the
+ * codebase, TypeScript-first route typing) and is more portable if a
+ * future deployment shape changes (Node/Deno/Bun/Workers).
+ *
+ * DEPENDENCY VERSIONS ARE SECURITY-PINNED, NOT ARBITRARY: `hono` >=4.12.25
+ * fixes CVE-2026-54286 (Windows-specific path traversal via encoded
+ * backslash %5C — directly relevant since this project runs on Windows);
+ * `@hono/node-server` >=2.0.5 (or 1.19.15) fixes GHSA-92pp-h63x-v22m
+ * (repeated-slash middleware bypass) and CVE-2026-29087 (auth bypass via
+ * inconsistent URL decoding between routing and static resolution).
+ * package.json pins ^4.13.7 / ^2.1.1 — versions well past both fixes,
+ * verified via `npm view` against the registry at pin time (2026-09-10).
+ * `npm audit` must report 0 vulnerabilities before this dependency is
+ * trusted, same standard as every other dependency in this project.
+ *
  * SECURITY POSTURE (see docs/DESIGN.md "Web GUI" decision,
- * THREAT_MODEL.md): local-only by design. `start()` binds to 127.0.0.1
- * exclusively — never 0.0.0.0 — so the household store's decrypted
- * contents and any unlocked in-memory passphrase are never reachable from
- * the network, matching the CLI's local-first trust model. There is
- * intentionally no remote-access mode; a user who wants remote access is
- * expected to use their own VPN/SSH tunnel, exactly as they would for any
- * other localhost-only admin tool (this project does not reinvent that).
+ * THREAT_MODEL.md): this server binds to 127.0.0.1 ONLY (never 0.0.0.0)
+ * — see start() below — matching the CLI's local-first trust model. The
+ * household store's decrypted contents and any in-memory passphrase must
+ * never be reachable from the network. Tests use Hono's app.request()
+ * (an in-process fetch, no real socket) so this suite never needs a live
+ * port.
  *
  * Unlock policy (user decision, 2026-09-10): BWS-backed unlock is
  * primary; an in-memory-only passphrase prompt is the fallback for users
  * without Bitwarden configured. See packages/core/src/web/unlock.ts for
  * the resolution logic and the passphrase session's memory-safety
  * properties (never logged, auto-expires on idle).
- *
- * This is the FIRST vertical slice of the web GUI (unlock/session only).
- * Household management, broker-status dashboard, and run control are
- * separate, later slices — see docs/ROADMAP.md.
  */
-export function buildServer(): FastifyInstance {
-  const app = Fastify({ logger: false });
+export function buildServer(): Hono {
+  const app = new Hono();
   const passphraseSession = new InMemoryPassphraseSession();
 
-  app.get("/api/unlock/status", async (_req, reply) => {
+  app.get("/api/unlock/status", (c) => {
     const source = resolveUnlockSource();
     const locked = source.kind === "bws" ? true : !passphraseSession.hasPassphrase();
-    return reply.send({ source: source.kind, locked });
+    return c.json({ source: source.kind, locked });
   });
 
-  app.post<{ Body: { passphrase?: string } }>("/api/unlock", async (req, reply) => {
+  app.post("/api/unlock", async (c) => {
     const source = resolveUnlockSource();
     if (source.kind === "bws") {
       // BWS mode never accepts a raw passphrase over HTTP — unlocking in
       // that mode means BWS_ACCESS_TOKEN is already present in the
       // server's own environment; there is nothing for the browser to
       // submit. Reject explicitly rather than silently ignoring the body.
-      return reply.status(409).send({
-        error: "This server is configured for BWS-backed unlock; no passphrase is needed or accepted.",
-      });
+      return c.json(
+        { error: "This server is configured for BWS-backed unlock; no passphrase is needed or accepted." },
+        409,
+      );
     }
 
-    const passphrase = req.body?.passphrase;
+    const body = await c.req.json<{ passphrase?: string }>().catch(() => ({}) as { passphrase?: string });
+    const passphrase = body?.passphrase;
     if (!passphrase || typeof passphrase !== "string") {
-      return reply.status(400).send({ error: "Missing required field: passphrase" });
+      return c.json({ error: "Missing required field: passphrase" }, 400);
     }
 
     passphraseSession.unlock(passphrase);
-    return reply.send({ locked: false });
+    return c.json({ locked: false });
   });
 
-  app.post("/api/lock", async (_req, reply) => {
+  app.post("/api/lock", (c) => {
     passphraseSession.lock();
-    return reply.send({ locked: true });
+    return c.json({ locked: true });
   });
+
+  /**
+   * Resolves the live PeopleStore for this request, or null if the
+   * session is locked. See the equivalent Fastify-era docstring (removed
+   * on the Hono rewrite) for the full rationale — unchanged behavior:
+   * BWS mode not yet wired for the web GUI (issue tracked separately from
+   * this framework swap); passphrase-prompt mode requires the in-memory
+   * session to be unlocked AND OPTOUTOS_WEB_STORE_PATH to be configured.
+   */
+  function resolveHouseholdStore(): PeopleStore | null {
+    const source = resolveUnlockSource();
+    if (source.kind === "passphrase-prompt") {
+      if (!passphraseSession.hasPassphrase()) return null;
+      const storePath = process.env.OPTOUTOS_WEB_STORE_PATH;
+      if (!storePath) return null;
+      return new LocalEncryptedFileStore(storePath, passphraseSession.getPassphrase());
+    }
+    return null;
+  }
+
+  app.get("/api/people", async (c) => {
+    const store = resolveHouseholdStore();
+    if (!store) return c.json({ error: "Household store is locked or not configured." }, 423);
+
+    const people = await listPeople(store);
+    return c.json(people);
+  });
+
+  app.get("/api/people/:id", async (c) => {
+    const store = resolveHouseholdStore();
+    if (!store) return c.json({ error: "Household store is locked or not configured." }, 423);
+
+    const people = await listPeople(store);
+    const person = people.find((p) => p.id === c.req.param("id"));
+    if (!person) return c.json({ error: "Person not found" }, 404);
+    return c.json(person);
+  });
+
+  app.post("/api/people", async (c) => {
+    const store = resolveHouseholdStore();
+    if (!store) return c.json({ error: "Household store is locked or not configured." }, 423);
+
+    const body = await c.req.json<PersonFieldsInput>().catch(() => ({}) as PersonFieldsInput);
+    const { firstName, lastName } = body;
+    if (!firstName || !lastName) {
+      return c.json({ error: "firstName and lastName are required" }, 400);
+    }
+
+    const created = await addPerson(store, { ...body, firstName, lastName });
+    return c.json(created, 201);
+  });
+
+  app.patch("/api/people/:id", async (c) => {
+    const store = resolveHouseholdStore();
+    if (!store) return c.json({ error: "Household store is locked or not configured." }, 423);
+
+    const body = await c.req.json<PersonFieldsInput>().catch(() => ({}) as PersonFieldsInput);
+    try {
+      const updated = await editPerson(store, c.req.param("id"), body);
+      return c.json(updated);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 404);
+    }
+  });
+
+  // Static asset serving (the frontend) LAST — Hono matches routes in
+  // registration order for wildcard patterns, so the explicit /api/*
+  // routes above must be registered first or a broad static wildcard
+  // could shadow them.
+  app.use("/*", serveStatic({ root: PUBLIC_DIR }));
 
   return app;
 }
 
 /**
  * Starts the server bound to 127.0.0.1 only. Not called from tests
- * (which use Fastify's inject() and never open a real socket) — only from
- * the actual CLI entry point (src/cli.ts, added in a later slice) or a
- * manual `npm start`.
+ * (which use Hono's app.request(), an in-process fetch that never opens a
+ * real socket) — only from the actual CLI entry point (added in a later
+ * slice) or a manual `npm start`.
  */
-export async function start(port = 4173): Promise<FastifyInstance> {
+export function start(port = 4173): ServerType {
   const app = buildServer();
-  await app.listen({ port, host: "127.0.0.1" });
-  return app;
+  return serve({ fetch: app.fetch, port, hostname: "127.0.0.1" });
 }

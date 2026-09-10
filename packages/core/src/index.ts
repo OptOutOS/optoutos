@@ -24,6 +24,7 @@ export * from "./people/store.js";
 export * from "./people/local-file-store.js";
 export * from "./people/bws-store.js";
 export * from "./people/household-matching.js";
+export * from "./people/person-commands.js";
 export * from "./logging/run-logger.js";
 export * from "./scheduling/scheduler.js";
 export * from "./scheduling/run-scheduled.js";

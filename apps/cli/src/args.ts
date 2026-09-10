@@ -1,4 +1,4 @@
-import { RELATIONSHIP_TYPES, type RelationshipType } from "@optoutos/core";
+import { RELATIONSHIP_TYPES, type RelationshipType, type PersonFieldsInput } from "@optoutos/core";
 
 export type StoreSelector =
   | { kind: "local-file"; path: string }
@@ -7,16 +7,6 @@ export type StoreSelector =
 export type RunSource =
   | { kind: "profile-file"; path: string }
   | { kind: "household"; store: StoreSelector; personId: string };
-
-export interface PersonFieldsInput {
-  firstName?: string;
-  lastName?: string;
-  emails?: string[];
-  phones?: string[];
-  addresses?: { street: string; city: string; state: string; zip: string }[];
-  dateOfBirth?: string;
-  notes?: string;
-}
 
 export type ParsedArgs =
   | { command: "help" }

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OptOutOS</title>
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <header>
+    <h1>OptOutOS</h1>
+    <p class="tagline">Local-first data-broker removal — runs entirely on your machine.</p>
+  </header>
+
+  <main id="app">
+    <section id="unlock-screen">
+      <h2>Unlock household store</h2>
+      <p id="unlock-source-note"></p>
+      <form id="unlock-form">
+        <label for="passphrase-input">Passphrase</label>
+        <input id="passphrase-input" type="password" autocomplete="current-password" />
+        <button type="submit">Unlock</button>
+      </form>
+      <p id="unlock-error" class="error" hidden></p>
+    </section>
+
+    <section id="household-screen" hidden>
+      <div class="toolbar">
+        <h2>Household</h2>
+        <button id="lock-button" type="button">Lock</button>
+      </div>
+
+      <table id="people-table">
+        <thead>
+          <tr><th>Name</th><th>Email</th><th>Phone</th><th>Notes</th><th></th></tr>
+        </thead>
+        <tbody id="people-tbody"></tbody>
+      </table>
+
+      <h3>Add person</h3>
+      <form id="add-person-form">
+        <label for="first-name-input">First name*</label>
+        <input id="first-name-input" required />
+        <label for="last-name-input">Last name*</label>
+        <input id="last-name-input" required />
+        <label for="email-input">Email</label>
+        <input id="email-input" type="email" />
+        <label for="phone-input">Phone</label>
+        <input id="phone-input" type="tel" />
+        <button type="submit">Add</button>
+      </form>
+      <p id="people-error" class="error" hidden></p>
+    </section>
+  </main>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

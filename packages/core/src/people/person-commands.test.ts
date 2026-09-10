@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { addPerson, editPerson, listPeople, linkPeople } from "./person-commands.js";
-import type { PeopleStore } from "@optoutos/core";
-import type { Household } from "@optoutos/core";
+import type { PeopleStore } from "./store.js";
+import type { Household } from "./types.js";
 
 function makeMockStore(initial: Household): PeopleStore & { saved: Household[] } {
   const saved: Household[] = [];
