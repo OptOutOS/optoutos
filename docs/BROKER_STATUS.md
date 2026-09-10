@@ -611,3 +611,48 @@ This is exactly the failure mode "verify, don't assume" exists to catch,
 and it worked — the fix landed within the same session because the user's
 own probing permission surfaced it immediately, before it could ship
 further or mislead a future session into trusting a broken detector.
+
+## Round 13 — Spokeo re-check (issue #7): block has gotten WORSE, not
+better (2026-09-10)
+
+Re-probed Spokeo per issue #7, expecting to possibly find the Round 8
+`/optout`-only 403 had lifted. Instead found the block has **escalated to
+the entire domain**, via plain HTTP requests (no FlareSolverr running in
+this environment to cross-check against — see limitation below):
+
+- `https://www.spokeo.com` (bare homepage) → `403 Forbidden`
+- `https://www.spokeo.com/John-Smith` (a search-result route Round 6
+  verified working) → `403 Forbidden`
+- `https://www.spokeo.com/robots.txt` → `403 Forbidden` — this is the
+  single most permissively-served path on virtually any site; a
+  robots.txt 403 is a strong signal of a domain-wide/IP-level block
+  rather than a route-specific WAF rule.
+- Response body/headers identical across all of the above: `Server:
+  awselb/2.0`, 520-byte generic Nginx-style "403 Forbidden" body — same
+  signature as Round 8's `/optout` finding, now on every route tried.
+
+**This directly contradicts Round 6/8's finding that "search still works
+fine on the same domain."** Either the block has genuinely widened since
+Round 8, or this specific network/IP has since been blocked at a broader
+scope than before (both are real, non-mutually-exclusive possibilities —
+this project's own network has been independently observed to
+IP-sinkhole/get-blocked by other brokers, e.g. ClustrMaps).
+
+**Known limitation of this check:** Round 6/8's search verification used
+FlareSolverr (a real-browser solver clearing JS/Cloudflare challenges) —
+no FlareSolverr instance is running in this environment right now, so this
+round's probe used plain `curl` only. A plain-curl 403 does not fully
+reproduce the adapter's real code path. This finding should be treated as
+"worse than Round 8, needs a FlareSolverr-backed re-check to confirm
+severity precisely" rather than a final verdict that Spokeo search itself
+is now broken — that would be an overclaim this project's own discipline
+forbids.
+
+**Decision:** hold `optOut()`/candidateId-threading work exactly as Round
+8 already decided — this finding doesn't change that decision, it
+reinforces it (the page is even less reachable than before, not more).
+Re-run this check with FlareSolverr available before concluding anything
+stronger. Filed as a comment on issue #7 rather than closing it — the
+question the issue tracks (\"has this lifted?\") now has a clear \"no, and
+it's worse\" answer, but the root cause needs the fuller FlareSolverr-based
+recheck to pin down.
