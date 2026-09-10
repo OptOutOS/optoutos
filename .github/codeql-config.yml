@@ -1,0 +1,26 @@
+name: "OptOutOS CodeQL config"
+
+# Rationale for paths-ignore (2026-09-10, resolving code-scanning alert #4):
+#
+# packages/core/src/brokers/__fixtures__/ contains captured HTML snapshots
+# of real broker sites, used as static test input for cheerio-based parser
+# tests (checkpeople.test.ts, usphonebook.test.ts, spokeo.test.ts,
+# advancedbackgroundchecks.test.ts). These files are:
+#   - never served by anything in this repo
+#   - never executed as scripts by anything in this repo
+#   - parsed ONLY as inert DOM text via cheerio's HTML parser in tests
+#
+# CodeQL's js/functionality-from-untrusted-source rule (alert #4) flagged
+# checkpeople-no-match.html for an unpinned CDN <script> tag that is part
+# of a captured page, not code this project wrote or runs. The same
+# pattern exists in other fixture files (checkpeople-home.html,
+# usphonebook-john-smith.html) that simply hadn't been re-scanned yet —
+# same false-positive risk, not a real vulnerability in this repo's own
+# code. Excluding the fixture directory from analysis is the correct fix,
+# not per-alert dismissal, since new captured fixtures will keep
+# triggering the same non-issue otherwise.
+paths-ignore:
+  - "packages/core/src/brokers/__fixtures__/**"
+  - "apps/web/dist/**"
+  - "packages/core/dist/**"
+  - "apps/cli/dist/**"
