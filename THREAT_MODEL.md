@@ -81,13 +81,31 @@ is a real trust boundary this project does not cross. Only real-browser,
 locally-run solvers (e.g. a self-hosted [EzSolver](https://github.com/ismoiloffS/EzSolver)-
 or [Theyka/Turnstile-Solver](https://github.com/Theyka/Turnstile-Solver)-style
 service, following the same self-hosted-HTTP-service pattern already used
-for FlareSolverr) are in scope.
-
-**Still a hard line, unchanged:** if no reliable solver exists for a given
+for FlareSolverr) are in scope. If no reliable solver exists for a given
 challenge type at all (e.g. an anti-bot vendor this project has no working
 solver for), the adapter must fail closed to `requires_manual_verification`
 — never guess, never fabricate a submission, never retry indefinitely
 against a challenge it cannot actually clear.
+
+## Payment paywalls are NOT anti-bot, and are not bypassed by default
+(2026-09-10)
+
+Anti-bot challenges (above) block automation indiscriminately — a human in
+a real browser gets through free, same as anyone, so defeating one only
+proves "a human-like browser is here." A genuine PAYMENT paywall (e.g.
+CheckPeople gating its report behind checkout — see `docs/BROKER_STATUS.md`
+Round 12) is different in kind: it gates the broker's own paid product, and
+circumventing it means extracting that product without paying, which is
+closer to unauthorized-access/payment-circumvention than to bot-detection
+evasion, with real legal exposure of its own.
+
+**Policy:** OptOutOS never attempts to bypass a genuine payment paywall by
+default. A user may opt in globally via `OPTOUTOS_ALLOW_PAYWALL_BYPASS=1`,
+which permits (but does not itself implement) an adapter's optional
+`paywallSearch()` fallback — see `docs/DESIGN.md` decision 11 for the full
+mechanism. Adapters must never implement `paywallSearch()` by simulating a
+purchase or exploiting an access-control flaw; only a genuinely free,
+independently verified data path qualifies.
 
 ## Trust boundaries by deployment mode
 

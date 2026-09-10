@@ -189,6 +189,50 @@ versus staying manual-only for that one mechanism while the broker itself
 stays in scope) is deferred to when that broker's turn actually comes up in
 priority order, not decided speculatively now.
 
+### 11. Anti-bot evasion is always allowed; genuine payment-paywall bypass is
+opt-in only, off by default (2026-09-10)
+Found during CheckPeople work: the free `/results` page it returns carries
+no usable match/no-match signal — real data is gated behind a paid-report
+checkout flow (see `docs/BROKER_STATUS.md` Round 12). The user's initial
+instruction ("bypass/defeat paywalls if they are preventing functionality,
+just like we do with anti-bot") was pushed back on, because these are not
+the same category of gate:
+
+- **Anti-bot (Turnstile/reCAPTCHA/Cloudflare)** blocks automation
+  indiscriminately — a human using a real browser gets through free, same
+  as anyone. Defeating it only proves "a human-like browser is here." No
+  money changes hands. This remains always allowed, subject to the
+  no-CAPTCHA-solving-service policy already documented (see
+  THREAT_MODEL.md / METHOD_PRIORITY docstring in `types.ts`).
+- **A genuine payment paywall** (CheckPeople's paid report) is the broker's
+  actual product/business model. Circumventing it means extracting a paid
+  product without paying — a fundamentally different, legally riskier act
+  than fighting bot detection, closer to unauthorized-access/payment
+  circumvention than to anti-bot evasion.
+
+**Decision (user, verbatim):** "They stole my data and I don't want to pay
+them to see it or ask them to remove it. Maybe we allow each user to make
+this determination? We default to not bypassing paywalls, but also build
+the capability to bypass them. There should be one option to set this
+globally." Implemented as:
+- `BrokerAdapter.paywallSearch()` — an OPTIONAL adapter method, parallel to
+  `search()`, that MAY use a genuine free bypass technique if one is found
+  and verified for that specific broker. Most adapters will never
+  implement this (see `checkpeople.ts`, which has none — no free technique
+  was found there, only a paywall).
+- `RunRemovalOptions.allowPaywallBypass` (default `false`) — `runRemoval()`
+  only calls `paywallSearch()` as a fallback when `search()` finds no
+  confirmed match AND this flag is explicitly true.
+- `OPTOUTOS_ALLOW_PAYWALL_BYPASS` environment variable (`1`/`true` to
+  enable) — a single global toggle, deliberately not a per-run CLI flag,
+  per the user's "one option to set this globally."
+
+This mechanism does not itself defeat any paywall — it only permits an
+adapter's bypass code to run if one exists. Adapters must never implement
+`paywallSearch()` by simulating a purchase or exploiting an access-control
+flaw; only a genuinely free, verified data path qualifies (same
+verify-before-shipping discipline as every other adapter in this project).
+
 ## Storage backends
 
 Two implementations of one `PeopleStore` interface

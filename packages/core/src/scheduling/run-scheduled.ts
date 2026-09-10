@@ -26,6 +26,14 @@ export interface RunScheduledChecksOptions {
   page: Page;
   /** Same meaning as RunRemovalOptions.dryRun — passed straight through. */
   dryRun: boolean;
+  /**
+   * Same meaning as RunRemovalOptions.allowPaywallBypass — passed straight
+   * through. Defaults to false (undefined is treated the same as false).
+   * Callers (e.g. the CLI) should source this from
+   * readAllowPaywallBypassFromEnv() so the setting stays a single global
+   * toggle rather than something set differently per scheduled run.
+   */
+  allowPaywallBypass?: boolean;
   /** Injectable clock for deterministic tests; defaults to the real time. */
   now?: Date;
   /**
@@ -68,7 +76,7 @@ export interface RunScheduledChecksSummary {
 export async function runScheduledChecks(
   options: RunScheduledChecksOptions,
 ): Promise<RunScheduledChecksSummary> {
-  const { store, adapters, page, dryRun, logger } = options;
+  const { store, adapters, page, dryRun, allowPaywallBypass, logger } = options;
   const now = options.now ?? new Date();
 
   const household = await store.load();
@@ -87,7 +95,7 @@ export async function runScheduledChecks(
       const profile = personToPiiProfile(person);
 
       try {
-        const result = await runRemoval(adapter, page, profile, { dryRun });
+        const result = await runRemoval(adapter, page, profile, { dryRun, allowPaywallBypass });
 
         if (result.status === "failed") {
           errorCount++;

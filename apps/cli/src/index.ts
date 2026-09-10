@@ -6,6 +6,7 @@ import {
   PiiProfileSchema,
   runRemoval,
   runScheduledChecks,
+  readAllowPaywallBypassFromEnv,
   JsonlRunLogger,
   type PiiProfile,
   type PersonRecord,
@@ -212,6 +213,13 @@ export async function main(argv: string[]): Promise<number> {
         );
       }
 
+      const allowPaywallBypass = readAllowPaywallBypassFromEnv();
+      if (allowPaywallBypass) {
+        console.log(
+          `[paywall-bypass] Note: OPTOUTOS_ALLOW_PAYWALL_BYPASS is set. Adapters with a verified free paywall-bypass path (most do not have one) may use it as a fallback.`,
+        );
+      }
+
       const logger = new JsonlRunLogger(runLogPathFor(parsed.store));
       const browser = await chromium.launch({ headless: true });
       try {
@@ -221,6 +229,7 @@ export async function main(argv: string[]): Promise<number> {
           adapters,
           page,
           dryRun: !parsed.execute,
+          allowPaywallBypass,
           logger,
         });
         console.log(
@@ -271,10 +280,20 @@ export async function main(argv: string[]): Promise<number> {
     );
   }
 
+  const allowPaywallBypass = readAllowPaywallBypassFromEnv();
+  if (allowPaywallBypass) {
+    console.log(
+      `[paywall-bypass] Note: OPTOUTOS_ALLOW_PAYWALL_BYPASS is set. If this broker's adapter implements a genuine, verified free bypass of a payment paywall (most do not), it may be used as a fallback when the free search finds no match.`,
+    );
+  }
+
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
-    const result = await runRemoval(adapter, page, profile, { dryRun: !parsed.execute });
+    const result = await runRemoval(adapter, page, profile, {
+      dryRun: !parsed.execute,
+      allowPaywallBypass,
+    });
 
     console.log(JSON.stringify(result, null, 2));
     return result.status === "failed" ? 1 : 0;

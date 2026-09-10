@@ -192,4 +192,63 @@ describe("runScheduledChecks", () => {
     expect(summary.ranCount).toBe(2);
     expect(summary.errorCount).toBe(1);
   });
+
+  it("passes allowPaywallBypass through to runRemoval when set", async () => {
+    const person = makePerson();
+    const household = { people: [person] };
+    const store = makeFakeStore(household);
+
+    const paywallSearchSpy = vi.fn(async () => [
+      { candidateId: "bypassed", observedName: "John Smith", observedCity: "", observedState: "" },
+    ]);
+    const adapter: BrokerAdapter = {
+      ...makeFakeAdapter("checkpeople", {
+        broker: "checkpeople",
+        status: "submitted",
+        timestamp: "2026-09-09T00:00:00.000Z",
+        evidence: {},
+      }),
+      paywallSearch: paywallSearchSpy,
+    };
+
+    await runScheduledChecks({
+      store,
+      adapters: [adapter],
+      page: fakePage,
+      dryRun: false,
+      allowPaywallBypass: true,
+      now: new Date("2026-09-09T00:00:00.000Z"),
+    });
+
+    expect(paywallSearchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call paywallSearch when allowPaywallBypass is omitted (defaults to false)", async () => {
+    const person = makePerson();
+    const household = { people: [person] };
+    const store = makeFakeStore(household);
+
+    const paywallSearchSpy = vi.fn(async () => [
+      { candidateId: "bypassed", observedName: "John Smith", observedCity: "", observedState: "" },
+    ]);
+    const adapter: BrokerAdapter = {
+      ...makeFakeAdapter("checkpeople", {
+        broker: "checkpeople",
+        status: "submitted",
+        timestamp: "2026-09-09T00:00:00.000Z",
+        evidence: {},
+      }),
+      paywallSearch: paywallSearchSpy,
+    };
+
+    await runScheduledChecks({
+      store,
+      adapters: [adapter],
+      page: fakePage,
+      dryRun: false,
+      now: new Date("2026-09-09T00:00:00.000Z"),
+    });
+
+    expect(paywallSearchSpy).not.toHaveBeenCalled();
+  });
 });

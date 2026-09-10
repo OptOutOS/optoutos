@@ -78,6 +78,22 @@ passphrase separately and securely.
 store (same `BWS_ACCESS_TOKEN` env var convention as the rest of the
 project). Bitwarden then handles encryption at rest and backup.
 
+**Paywall bypass (opt-in, off by default)**: some brokers gate their data
+behind a genuine payment paywall (not anti-bot detection — e.g. CheckPeople's
+paid report). OptOutOS never attempts to bypass a real paywall unless you
+explicitly opt in globally via:
+
+```sh
+export OPTOUTOS_ALLOW_PAYWALL_BYPASS=1
+```
+
+This is a single global toggle, not a per-run flag — set it once if you
+want it on. It only permits an adapter's `paywallSearch()` fallback to run
+if one exists for that broker; most brokers have none because no genuine
+free bypass technique was found (see `docs/DESIGN.md` decision 11 and
+`docs/BROKER_STATUS.md` Round 12 for the CheckPeople case that prompted
+this policy).
+
 ## Profile format
 
 `--profile` points to a local JSON file matching the `PiiProfile` schema in

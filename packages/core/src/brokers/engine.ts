@@ -9,6 +9,23 @@ import {
 } from "./matching.js";
 
 /**
+ * Reads the global paywall-bypass setting from the environment.
+ *
+ * POLICY (user decision, 2026-09-10): this is deliberately a single
+ * environment-variable toggle, not a per-run CLI flag — the user wants one
+ * global setting they consciously turn on, not something easy to
+ * accidentally pass on a single invocation. Defaults to false (off) unless
+ * the variable is exactly "1" or "true" (case-insensitive), matching the
+ * project's existing conservative-parsing convention.
+ */
+export function readAllowPaywallBypassFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const raw = env.OPTOUTOS_ALLOW_PAYWALL_BYPASS?.trim().toLowerCase();
+  return raw === "1" || raw === "true";
+}
+
+/**
  * The single required entry point for running a removal against a broker.
  *
  * PRIVACY-MINIMIZATION RULE (see types.ts docstring on BrokerAdapter):
@@ -48,6 +65,21 @@ export interface RunRemovalOptions {
    * but had no effect on this function).
    */
   dryRun?: boolean;
+
+  /**
+   * When true, permits runRemoval() to fall back to adapter.paywallSearch()
+   * if adapter.search() finds no confirmed match. Defaults to false.
+   *
+   * POLICY (user decision, 2026-09-10): distinct from anti-bot evasion
+   * (always allowed). A genuine payment paywall gates the broker's own
+   * paid product, not just automation — bypassing it is opt-in only. This
+   * flag is a single global switch, matching the existing dryRun pattern:
+   * safe default, explicit opt-in to change behavior. It only permits the
+   * engine to CALL an adapter's paywallSearch if one exists — it does not
+   * make one exist. Most adapters (e.g. checkpeople.ts) have none because
+   * no real free bypass technique was found.
+   */
+  allowPaywallBypass?: boolean;
 }
 
 export async function runRemoval(
@@ -56,7 +88,7 @@ export async function runRemoval(
   fullProfile: PiiProfile,
   options: RunRemovalOptions = {},
 ): Promise<RemovalResult & { matchDetails?: MatchScoreResult }> {
-  const { dryRun = false } = options;
+  const { dryRun = false, allowPaywallBypass = false } = options;
   const timestamp = new Date().toISOString();
 
   if (!adapter.search) {
@@ -87,6 +119,24 @@ export async function runRemoval(
       evidence: {},
       error: `search() failed: ${err instanceof Error ? err.message : String(err)}`,
     };
+  }
+
+  // Fall back to a paywall-bypass search ONLY if the caller has explicitly
+  // opted in AND the free search found nothing AND the adapter actually
+  // implements one. This never runs on the happy path — see
+  // RunRemovalOptions.allowPaywallBypass and BrokerAdapter.paywallSearch.
+  if (candidates.length === 0 && allowPaywallBypass && adapter.paywallSearch) {
+    try {
+      candidates = await adapter.paywallSearch(page, minimalProfile);
+    } catch (err) {
+      return {
+        broker: adapter.brokerId,
+        status: "failed",
+        timestamp,
+        evidence: {},
+        error: `paywallSearch() failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
   }
 
   if (candidates.length === 0) {

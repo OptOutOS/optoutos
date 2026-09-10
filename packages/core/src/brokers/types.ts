@@ -101,4 +101,28 @@ export interface BrokerAdapter {
     profile: Partial<PiiProfile>,
     candidate?: SearchCandidate,
   ): Promise<RemovalResult>;
+
+  /**
+   * OPTIONAL. Like search(), but permitted to use a genuine paywall-bypass
+   * technique (e.g. a discovered free path around a broker's paid-report
+   * gate) rather than only the broker's free-tier search UI.
+   *
+   * POLICY (user decision, 2026-09-10): OptOutOS distinguishes anti-bot
+   * evasion (always allowed — see METHOD_PRIORITY docstring) from genuine
+   * PAYMENT paywall bypass (opt-in ONLY, off by default). A payment
+   * paywall gates the broker's own paid product/service, not just
+   * automation — circumventing it is a different category of action from
+   * defeating a bot-detection widget, and carries real legal exposure the
+   * user must consciously accept via RunRemovalOptions.allowPaywallBypass.
+   *
+   * runRemoval() only calls this when the caller has explicitly set
+   * allowPaywallBypass:true AND search() itself found no confirmed match —
+   * it is a fallback, never the first search attempt. Implement this ONLY
+   * when a real, verified, free technique exists (e.g. a genuinely public
+   * API endpoint, a cache, a legitimately non-paywalled data path) — never
+   * as a placeholder "try harder" stub, and never by simulating a purchase
+   * or exploiting an access-control flaw. Most brokers will not implement
+   * this at all (see checkpeople.ts, where no such technique was found).
+   */
+  paywallSearch?(page: Page, minimalProfile: Partial<PiiProfile>): Promise<SearchCandidate[]>;
 }
