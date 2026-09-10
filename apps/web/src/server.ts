@@ -10,6 +10,8 @@ import {
   addPerson,
   editPerson,
   listPeople,
+  listBrokerIds,
+  getBrokerAdapter,
   type PeopleStore,
   type PersonFieldsInput,
 } from "@optoutos/core";
@@ -155,6 +157,32 @@ export function buildServer(): Hono {
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : String(err) }, 404);
     }
+  });
+
+  app.get("/api/people/:id/dashboard", async (c) => {
+    const store = resolveHouseholdStore();
+    if (!store) return c.json({ error: "Household store is locked or not configured." }, 423);
+
+    const people = await listPeople(store);
+    const person = people.find((p) => p.id === c.req.param("id"));
+    if (!person) return c.json({ error: "Person not found" }, 404);
+
+    // Read-only: this is broker STATUS only, no live search/removal call
+    // happens here (see docs/ROADMAP.md issue #15 for run control). One
+    // row per REGISTERED broker (not just brokers this person has ever
+    // been checked against), so a never-checked broker shows up
+    // explicitly rather than being silently absent from the list.
+    const rows = listBrokerIds().map((brokerId) => {
+      const adapter = getBrokerAdapter(brokerId);
+      const history = person.brokerRunHistory[brokerId];
+      return {
+        brokerId,
+        brokerName: adapter?.brokerName ?? brokerId,
+        lastRunAt: history?.lastRunAt ?? null,
+        lastStatus: history?.lastStatus ?? null,
+      };
+    });
+    return c.json(rows);
   });
 
   // Static asset serving (the frontend) LAST — Hono matches routes in

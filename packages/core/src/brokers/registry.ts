@@ -1,20 +1,23 @@
-import type { BrokerAdapter } from "@optoutos/core";
-import {
-  ThatsThemAdapter,
-  AdvancedBackgroundChecksAdapter,
-  BeenVerifiedAdapter,
-  CheckPeopleAdapter,
-  InfoTracerAdapter,
-  InteliusAdapter,
-  PublicDataUsaAdapter,
-  RadarisAdapter,
-  SpokeoAdapter,
-  UsPhonebookAdapter,
-  WhitepagesAdapter,
-} from "@optoutos/core";
+import type { BrokerAdapter } from "./types.js";
+import { ThatsThemAdapter } from "./thatsthem.js";
+import { AdvancedBackgroundChecksAdapter } from "./advancedbackgroundchecks.js";
+import { BeenVerifiedAdapter } from "./beenverified.js";
+import { CheckPeopleAdapter } from "./checkpeople.js";
+import { InfoTracerAdapter } from "./infotracer.js";
+import { InteliusAdapter } from "./intelius.js";
+import { PublicDataUsaAdapter } from "./publicdatausa.js";
+import { RadarisAdapter } from "./radaris.js";
+import { SpokeoAdapter } from "./spokeo.js";
+import { UsPhonebookAdapter } from "./usphonebook.js";
+import { WhitepagesAdapter } from "./whitepages.js";
 
 /**
  * Central registry mapping brokerId -> a fresh adapter instance.
+ *
+ * Moved from apps/cli/src/registry.ts into packages/core (2026-09-10) so
+ * both the CLI and the web GUI (apps/web, broker-status dashboard, issue
+ * #14) share one registry instead of duplicating the broker list — same
+ * reasoning as person-commands.ts's move earlier in this session.
  *
  * ClustrMaps is intentionally excluded — see docs/BROKER_STATUS.md: it is
  * DNS-sinkholed by common network-level ad/tracker blocklists (UniFi, Pi-hole

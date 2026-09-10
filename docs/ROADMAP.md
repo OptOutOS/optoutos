@@ -131,12 +131,14 @@ outcomes a user would judge this tool on don't exist yet for most brokers.
    pick after a real framework comparison the user asked for — see
    DESIGN.md decision 12) with unlock/lock session endpoints (BWS-primary/
    passphrase-fallback policy), full household CRUD (issue #13 — done),
-   and a minimal vanilla-JS frontend. Household-mutation logic
+   a read-only broker-status dashboard per person (issue #14 — done), and
+   a minimal vanilla-JS frontend. Household-mutation logic
    (add/edit/list/link person) moved from `apps/cli` into
-   `packages/core/src/people/person-commands.ts` so the CLI and web GUI
-   share one implementation. **Not yet built:** broker-status dashboard
-   (issue #14), run control with a mandatory search-only default (issue
-   #15).
+   `packages/core/src/people/person-commands.ts`, and the broker registry
+   (`listBrokerIds`/`getBrokerAdapter`) moved from `apps/cli` into
+   `packages/core/src/brokers/registry.ts`, so the CLI and web GUI share
+   one implementation of each. **Not yet built:** run control with a
+   mandatory search-only default (issue #15).
 
 ## Scope policy: no broker is dropped for its shape (2026-09-10)
 

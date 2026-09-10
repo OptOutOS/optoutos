@@ -12,6 +12,10 @@ const lockButton = document.getElementById("lock-button");
 const peopleTbody = document.getElementById("people-tbody");
 const addPersonForm = document.getElementById("add-person-form");
 const peopleError = document.getElementById("people-error");
+const dashboardScreen = document.getElementById("dashboard-screen");
+const dashboardHeading = document.getElementById("dashboard-heading");
+const dashboardTbody = document.getElementById("dashboard-tbody");
+const dashboardBackButton = document.getElementById("dashboard-back-button");
 
 async function api(path, options) {
   const res = await fetch(path, {
@@ -77,6 +81,11 @@ function renderPeople(people) {
     const notes = document.createElement("td");
     notes.textContent = person.notes || "";
     const actions = document.createElement("td");
+    const statusButton = document.createElement("button");
+    statusButton.type = "button";
+    statusButton.textContent = "View status";
+    statusButton.addEventListener("click", () => showDashboard(person));
+    actions.appendChild(statusButton);
     tr.append(name, email, phone, notes, actions);
     peopleTbody.appendChild(tr);
   }
@@ -117,6 +126,34 @@ addPersonForm.addEventListener("submit", async (e) => {
     peopleError.textContent = err.message;
     peopleError.hidden = false;
   }
+});
+
+function renderDashboard(rows) {
+  dashboardTbody.innerHTML = "";
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    const broker = document.createElement("td");
+    broker.textContent = row.brokerName;
+    const lastRunAt = document.createElement("td");
+    lastRunAt.textContent = row.lastRunAt ? new Date(row.lastRunAt).toLocaleDateString() : "Never checked";
+    const lastStatus = document.createElement("td");
+    lastStatus.textContent = row.lastStatus || "—";
+    tr.append(broker, lastRunAt, lastStatus);
+    dashboardTbody.appendChild(tr);
+  }
+}
+
+async function showDashboard(person) {
+  householdScreen.hidden = true;
+  dashboardScreen.hidden = false;
+  dashboardHeading.textContent = `Broker status — ${person.firstName} ${person.lastName}`;
+  const rows = await api(`/api/people/${person.id}/dashboard`);
+  renderDashboard(rows);
+}
+
+dashboardBackButton.addEventListener("click", () => {
+  dashboardScreen.hidden = true;
+  householdScreen.hidden = false;
 });
 
 refreshUnlockStatus();

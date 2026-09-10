@@ -52,9 +52,14 @@ button:hover {
   opacity: 0.85;
 }
 
-#lock-button {
+#lock-button, #dashboard-back-button {
   background: white;
   color: #1a1a1a;
+}
+
+.hint {
+  color: #555;
+  font-size: 0.85rem;
 }
 
 .toolbar {

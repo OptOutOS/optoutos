@@ -8,13 +8,17 @@ import {
   runScheduledChecks,
   readAllowPaywallBypassFromEnv,
   JsonlRunLogger,
+  getBrokerAdapter,
+  listBrokerIds,
+  addPerson,
+  editPerson,
+  listPeople,
+  linkPeople,
   type PiiProfile,
   type PersonRecord,
 } from "@optoutos/core";
 import { parseArgs, type StoreSelector } from "./args.js";
-import { getBrokerAdapter, listBrokerIds } from "./registry.js";
 import { resolveStore } from "./store-factory.js";
-import { addPerson, editPerson, listPeople, linkPeople } from "@optoutos/core";
 
 const HELP_TEXT = `
 OptOutOS CLI — local-first data-broker removal, run entirely on your machine.

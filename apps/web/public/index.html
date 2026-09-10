@@ -51,6 +51,20 @@
       </form>
       <p id="people-error" class="error" hidden></p>
     </section>
+
+    <section id="dashboard-screen" hidden>
+      <div class="toolbar">
+        <h2 id="dashboard-heading">Broker status</h2>
+        <button id="dashboard-back-button" type="button">Back to household</button>
+      </div>
+      <p class="hint">Read-only status. No search or removal is triggered from this screen.</p>
+      <table id="dashboard-table">
+        <thead>
+          <tr><th>Broker</th><th>Last checked</th><th>Last status</th></tr>
+        </thead>
+        <tbody id="dashboard-tbody"></tbody>
+      </table>
+    </section>
   </main>
 
   <script src="/app.js" type="module"></script>

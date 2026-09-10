@@ -303,15 +303,21 @@ tool.
 household CRUD (`GET/POST /api/people`, `GET/PATCH /api/people/:id`)
 against a `LocalEncryptedFileStore` (path via
 `OPTOUTOS_WEB_STORE_PATH`; BWS store selection for the web GUI itself is
-a fast-follow, not yet wired), and a minimal vanilla-JS frontend
-(`public/index.html` + `app.js` + `app.css`) serving both screens. Shared
-household-mutation logic (`addPerson`/`editPerson`/`listPeople`/
+a fast-follow, not yet wired), a read-only per-person broker-status
+dashboard (`GET /api/people/:id/dashboard`, issue #14 — one row per
+REGISTERED broker, not just ones with run history, so a never-checked
+broker is explicit rather than silently absent; no search/removal call
+happens from this route), and a minimal vanilla-JS frontend
+(`public/index.html` + `app.js` + `app.css`) serving all three screens.
+Shared household-mutation logic (`addPerson`/`editPerson`/`listPeople`/
 `linkPeople`) was moved from `apps/cli` into `packages/core/src/people/
-person-commands.ts` so both the CLI and the web GUI use one
-implementation, not two — the CLI now imports it from `@optoutos/core`
-instead of a local copy. **Not yet built:** broker-status dashboard
-(issue #14), run control with a mandatory search-only default (issue
-#15). Per user decision, run control will always expose a search-only
+person-commands.ts`, and the broker registry (`listBrokerIds`/
+`getBrokerAdapter`) was similarly moved from `apps/cli/src/registry.ts`
+into `packages/core/src/brokers/registry.ts` — same reasoning both
+times: apps must not depend on other apps, only on `packages/core`, and
+the web GUI needed exactly what the CLI already had. **Not yet built:**
+run control with a mandatory search-only default (issue #15). Per user
+decision, run control will always expose a search-only
 (dry-run) mode as the default, undismissable option — the GUI must never
 make submitting a real removal easier to trigger accidentally than the
 CLI's explicit `--execute` flag already prevents.
