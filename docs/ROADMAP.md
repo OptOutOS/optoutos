@@ -1,9 +1,9 @@
 # Roadmap
 
 Where OptOutOS actually stands, and what's next. Updated 2026-09-09 (Round
-6). This is an honesty document, not a marketing one — see "MVP definition"
-below for why this project is **not yet an MVP**, despite substantial
-working infrastructure.
+8 — post Rslint migration + scheduling/logging). This is an honesty
+document, not a marketing one — see "MVP definition" below for why this
+project is **not yet an MVP**, despite substantial working infrastructure.
 
 ## MVP definition (what "done" looks like for v0.1)
 
@@ -30,11 +30,11 @@ repeatably. Concretely:
 
 **Current honest status: working spike / pre-alpha with a hardened core.**
 The trust-critical foundation (privacy-minimization gate, encrypted
-multi-person storage, anti-bot solver integration, TDD discipline,
-CI/security hygiene) is genuinely solid — but the actual removal outcomes a
-user would judge this tool on don't exist yet for most brokers.
+multi-person storage, anti-bot solver integration, scheduling/logging, TDD
+discipline, CI/security hygiene) is genuinely solid — but the actual removal
+outcomes a user would judge this tool on don't exist yet for most brokers.
 
-## What's built and verified (as of 2026-09-09, Round 6)
+## What's built and verified (as of 2026-09-09, Round 8)
 
 - `packages/core`: broker registry (12 adapters, honestly-reported status),
   removal engine with the privacy-minimization gate, multi-person encrypted
@@ -42,17 +42,30 @@ user would judge this tool on don't exist yet for most brokers.
   **Turnstile/CAPTCHA solver integration** (`turnstile-solver.ts` +
   `turnstile-page-helper.ts`, live-verified against a real self-hosted
   EzSolver instance; wired into the That'sThem adapter as the reference
-  integration), **real search-result parsing for 2 brokers**
-  (`advancedbackgroundchecks`, `spokeo`).
+  integration), **real search-result parsing for 3 brokers**
+  (`advancedbackgroundchecks`, `spokeo`, `usphonebook`),
+  **recurring-run scheduling + non-PII audit logging**
+  (`scheduling/`, `logging/run-logger.ts`; per-broker `lastRunAt` rollup
+  lives inside the encrypted `PersonRecord`, not a second unencrypted
+  store — see docs/SCHEDULING.md).
 - `apps/cli`: `list-brokers`, `run` (profile-file or household-backed,
-  dry-run by default), `person add/edit/list/link`.
+  dry-run by default), `person add/edit/list/link`, `schedule-run`
+  (`--store`, `--broker`, `--execute`).
+- **Tooling**: linting migrated from ESLint + `@typescript-eslint` to
+  **Rslint** (`@rslint/core`) after TypeScript 7.0's Go-based rewrite broke
+  `@typescript-eslint` compatibility outright (no support exists as of
+  2026-09; see CONTRIBUTING.md and `rslint.shared.ts`'s header comment for
+  the migration pitfalls — a shared config referenced cross-directory
+  silently drops type-aware rules with no error). CI runs on Node 22
+  (Rslint needs >=22.6 for native `.ts` config loading).
 - CI/security: branch protection, Dependabot, secret scanning, CodeQL, all
-  free-tier GitHub features, **135 tests passing** (90 core + 45 CLI).
+  free-tier GitHub features, **167 tests passing** (117 core + 50 CLI).
 - Governance docs: README, THREAT_MODEL (incl. ToS risk note and the revised
   anti-bot policy), SECURITY, CONTRIBUTING, REQUIREMENTS, DESIGN,
-  BROKER_STATUS (6 verification rounds), FLARESOLVERR, PEOPLE_STORE.
+  BROKER_STATUS (8 verification rounds), FLARESOLVERR, PEOPLE_STORE,
+  SCHEDULING.
 
-## Immediate next steps (in priority order, revised 2026-09-09, Round 6)
+## Immediate next steps (in priority order, revised 2026-09-09, Round 8)
 
 1. **Extend the Turnstile solver to more brokers** — it's proven working
    (live-verified against a real EzSolver instance) and wired into
@@ -72,6 +85,10 @@ user would judge this tool on don't exist yet for most brokers.
    real, not-yet-designed change to the `runRemoval()`/engine interface.
    Needed for Spokeo (which requires a broker-issued per-listing URL for
    opt-out) and would generalize to any broker with the same shape.
+   Spokeo's `/optout` page itself is currently a flat 403 (Round 8, not a
+   solver-fixable challenge) — **hold this work until the page is
+   verifiably reachable again**, per an explicit decision not to guess
+   selectors against an inaccessible page.
 4. **A first real, verified removal submission** — needed to prove the full
    loop works, not just the search+scoring half. Requires either the
    solver to clear an opt-out-page challenge, or the candidateId-threading
@@ -112,11 +129,12 @@ user would judge this tool on don't exist yet for most brokers.
 - **Decision log / ADRs**: DESIGN.md's "Key decisions" section works for
   now: if the volume of one-off narrower decisions grows, consider
   lightweight per-decision ADR files instead of one growing document.
-- **No reusable internal skill/reference yet for the FlareSolverr +
-  Turnstile-solver workflow** — this session repeatedly re-derived the same
-  setup steps (venv, Playwright Chromium reuse, `TS_PROFILE_DIR` Windows
-  path gotcha, raw-fetch-then-cheerio pattern) from scratch across multiple
-  turns. Worth extracting into a project-local `docs/` runbook or an
-  assistant-side skill so future sessions don't re-discover the same
-  pitfalls (see Context Recovery notes for a new session, below, and the
-  session retrospective for the specific gap identified 2026-09-09).
+- **Dependency-version drift between sub-packages**: `apps/cli` and
+  `packages/core` each had their own `devDependencies` and drifted out of
+  sync across several PRs (TypeScript, ESLint, `@types/node` ranges
+  diverged). Fixed 2026-09-09 by moving shared devDependencies to the root
+  `package.json`. Lesson: after any dependency bump, do a genuinely clean
+  reinstall (`rm -rf node_modules package-lock.json && npm install`)
+  before trusting the result — a reused lockfile can mask a real
+  `ERESOLVE` conflict (this is exactly how the TypeScript 7 / Rslint issue
+  above was discovered).

@@ -370,3 +370,102 @@ search** (advancedbackgroundchecks, spokeo, usphonebook) — the full set of
 brokers previously known to be FlareSolverr/browser-reachable. The
 remaining 9 are IP-banned, account-gated, DNS-dead, or genuinely
 anti-bot-blocked at a level not yet unlocked (see Rounds 4-6 above).
+
+## Round 8 — Spokeo opt-out route blocked (403), and a real tooling
+outage found + fixed (2026-09-09/10)
+
+**Spokeo's `/optout` page (and `/opt-out`, `/opt_out`, and the `www.`
+variants of each) returns a flat 403 Forbidden (117-byte body)** via both
+direct Playwright and FlareSolverr's raw-HTML fetch. FlareSolverr itself
+logs "Challenge not detected!" for this route — i.e. this is a server-side
+WAF block, not an interactive Cloudflare/Turnstile challenge a solver could
+clear. Cross-checked against privacyguides.org's current data-broker-removal
+guidance: the `/optout` URL itself is correct and current, so this isn't a
+stale-route mistake — it's a genuine, currently-in-place access block on
+just the opt-out path (search still works fine on the same domain).
+
+**Decision:** hold all `optOut()` selector work for Spokeo until the page is
+verifiably reachable again. Writing form selectors against a page you can't
+load would mean guessing, which this project's verification discipline
+explicitly forbids (see CONTRIBUTING.md's "Broker adapter changes" section).
+
+Separately, this round also investigated and fixed a real correctness gap:
+`runRemoval()` and every working adapter's `optOut()` already accept a
+`candidate` parameter, but no adapter's `optOut()` implementation actually
+*uses* it yet. Checked which of the 3 real-search brokers would need it:
+ABC and USPhonebook's opt-out forms are name+email-based (no
+broker-issued per-listing URL required), so they don't block on this;
+only Spokeo's opt-out flow needs a listing URL from `search()`, and that
+work is exactly what's on hold above.
+
+### Recurring-run scheduling + audit logging (not a broker-verification
+round, but built and live-verified this session)
+
+Added two related capabilities directly motivated by the question "should
+scheduling rely on a running log, or a value stored somewhere — we're
+already storing PII?":
+
+- **`packages/core/src/logging/run-logger.ts`** — an append-only, non-PII
+  JSONL audit log (`JsonlRunLogger`). Records `personId` (an opaque UUID,
+  never a name), broker, status, timestamp, and the adapter's own
+  already-non-PII evidence. This answers "what happened and when" for
+  debugging, independent of the encrypted store.
+- **`packages/core/src/scheduling/`** — `isDue()` and
+  `runScheduledChecks()`. The scheduler's source of truth for "is this
+  broker due for a re-check" is a compact `brokerRunHistory` rollup added
+  directly to the (already-encrypted) `PersonRecord` schema — not the JSONL
+  log. Rationale: the rollup travels with the person and is deleted when
+  they're deleted, with no second unencrypted copy of PII-adjacent state;
+  the JSONL log is a separate, disposable audit trail. Default re-check
+  interval is 100 days, cited from privacyguides.org's published guidance
+  (re-check every 3-4 months).
+- New CLI command `schedule-run --store <path> [--broker <id>...]
+  [--execute]`, same dry-run-by-default gate as `run`. See
+  docs/SCHEDULING.md for cron/Task Scheduler setup.
+- **Live end-to-end verified** through the real CLI against a real
+  encrypted household store: first `schedule-run` correctly ran and logged;
+  an immediate second run correctly reported "0 checked, 1 not yet due"
+  from the persisted encrypted rollup; confirmed zero plaintext PII on disk
+  via `grep`.
+
+95 → 117 core tests (117 core + 50 CLI = 167 total).
+
+### A real tooling outage found during unrelated dependency cleanup
+
+While consolidating duplicated `devDependencies` (root vs. `apps/cli` vs.
+`packages/core` had drifted out of sync across PRs — the proximate cause of
+a user-reported "why are you using old versions" complaint about PR #6),
+a genuinely clean reinstall (`rm -rf node_modules package-lock.json && npm
+install`) revealed that the earlier PR #6 merge (TypeScript 5.9 → 7.0.2)
+was actually broken: TypeScript 7 is Microsoft's new Go-based rewrite, a
+different compiler architecture, and `@typescript-eslint` (no release
+newer than 8.70.0 exists) still hard-requires `typescript >=4.8.4 <6.1.0`
+as a peer dependency — no TS7 support exists yet. The earlier "clean
+install" verification that approved PR #6 wasn't actually clean: it reused
+an existing lockfile where TypeScript 5.9.3 was still hoisted at the
+workspace root, masking the conflict.
+
+**Fix:** replaced ESLint + `@typescript-eslint/parser` +
+`@typescript-eslint/eslint-plugin` with **Rslint** (`@rslint/core`), an
+ESLint-compatible linter built natively on typescript-go (the same engine
+TS7 uses), so there's no compiler-API version mismatch to break. A second,
+independent bug was found and fixed *during* this migration, before
+trusting the new tool: a shared root-level `rslint.config.ts` referenced
+from a sub-package via `--config ../../rslint.config.ts` (or run with a
+mismatched CWD) silently dropped type-aware rules with **no warning or
+error** — "lint passed" even against code with real, injected violations.
+Root cause: type-aware rule discovery needs the config file itself
+co-located with (or an ancestor of) the linted package's own
+`tsconfig.json`. Fixed with a per-package `rslint.config.ts` that imports
+shared rule definitions from a root `rslint.shared.ts` module — never a
+config referenced cross-directory. CI also needed a Node 20 → 22 bump
+(Rslint requires Node ≥22.6 for native `.ts` config file loading; this
+broke the very next push and was caught immediately by CI, not silently).
+
+Verified before calling any of this done: a real `rm -rf node_modules
+package-lock.json && npm install` succeeds with 0 vulnerabilities; both
+packages pass lint/typecheck/build/test (167/167); deliberately injected a
+throwaway unused-variable violation into each package and confirmed Rslint
+actually flags it (69 active rules in both) before removing it; confirmed
+`eslint-disable-next-line` comments still suppress rules; live-built and
+smoke-tested the CLI (`list-brokers`); CI and CodeQL both green on `main`.
