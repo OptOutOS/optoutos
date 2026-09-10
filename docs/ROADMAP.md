@@ -109,6 +109,20 @@ outcomes a user would judge this tool on don't exist yet for most brokers.
    OptOutOS ever accepts a user-supplied already-authenticated
    session/cookie, versus staying permanently manual-only for this specific
    broker while remaining "in scope."
+8. **Adapter-authoring kit** — ✅ done (2026-09-10). The stated future-scaling
+   lever for going from ~12 to ~200 brokers. Delivered as: (a)
+   `packages/core/src/brokers/detection.ts` — a single tested shared
+   anti-bot-marker detector, replacing six independently hand-rolled
+   versions that had real observed drift between them (found while
+   building this); all 7 real adapters migrated to use it, 0 test
+   regressions (150 core tests green after the refactor); (b)
+   `docs/ADAPTER_GUIDE.md` — the guide `types.ts` referenced by name since
+   the project's early days but never actually existed until now, covering
+   the 3 proven adapter patterns (direct-Playwright, FlareSolverr-raw-HTML,
+   Turnstile-solver) with real code drawn from this codebase, plus the
+   fail-closed/verification-discipline rules every adapter must follow.
+   Written from 7+ real adapters, not speculatively in advance of having
+   any.
 
 ## Scope policy: no broker is dropped for its shape (2026-09-10)
 

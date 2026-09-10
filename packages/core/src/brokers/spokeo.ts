@@ -3,6 +3,7 @@ import type { PiiProfile } from "../pii.js";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
 import type { SearchCandidate } from "./matching.js";
 import { getFlareSolverrClientFromEnv } from "../flaresolverr.js";
+import { hasAntiBotMarkerOnPage } from "./detection.js";
 import * as cheerio from "cheerio";
 
 /**
@@ -166,10 +167,7 @@ export class SpokeoAdapter implements BrokerAdapter {
 
     await page.goto(this.optOutUrl, { waitUntil: "domcontentloaded" });
 
-    const antiBot = page.locator(
-      ".cf-turnstile, #cf-turnstile, [class*='cf-chl-widget'], .g-recaptcha, [data-sitekey], .h-captcha",
-    );
-    if (await antiBot.count()) {
+    if (await hasAntiBotMarkerOnPage(page)) {
       return {
         broker: this.brokerId,
         status: "requires_manual_verification",

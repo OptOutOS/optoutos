@@ -2,6 +2,7 @@ import type { Page } from "playwright";
 import type { PiiProfile } from "../pii.js";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
 import type { SearchCandidate } from "./matching.js";
+import { hasAntiBotMarkerOnPage } from "./detection.js";
 import * as cheerio from "cheerio";
 
 /**
@@ -216,11 +217,10 @@ export class UsPhonebookAdapter implements BrokerAdapter {
     await page.goto(this.optOutUrl, { waitUntil: "domcontentloaded" });
 
     // Fail closed on the CAPTCHA observed on the live page. Do not bypass it.
-    const captcha = page.locator(
-      ".g-recaptcha, [class*=\"g-recaptcha\"], iframe[src*=\"recaptcha\"], [id*=\"recaptcha\"]",
-    );
+    // Uses the shared detection helper for the standard marker set, plus a
+    // page-text check specific to this broker's own rendered CAPTCHA copy.
     const renderedCaptchaText = page.getByText(/reCAPTCHA|Recaptcha requires verification|I'm not a robot/i);
-    if ((await captcha.count()) > 0 || (await renderedCaptchaText.count()) > 0) {
+    if ((await hasAntiBotMarkerOnPage(page)) || (await renderedCaptchaText.count()) > 0) {
       return {
         broker: this.brokerId,
         status: "requires_manual_verification",

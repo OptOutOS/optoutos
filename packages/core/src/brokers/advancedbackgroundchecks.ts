@@ -2,6 +2,7 @@ import type { Page } from "playwright";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
 import type { PiiProfile } from "../pii.js";
 import { getFlareSolverrClientFromEnv } from "../flaresolverr.js";
+import { hasAntiBotMarkerOnPage } from "./detection.js";
 import * as cheerio from "cheerio";
 import type { SearchCandidate } from "./matching.js";
 
@@ -199,14 +200,10 @@ export class AdvancedBackgroundChecksAdapter implements BrokerAdapter {
     await page.goto(this.optOutUrl, { waitUntil: "domcontentloaded" });
 
     // Detect, but never bypass, an interactive CAPTCHA/anti-bot challenge.
-    const recaptchaMarker = page.locator(
-      ".g-recaptcha, [class*='recaptcha'], [id*='recaptcha'], " +
-        "iframe[src*='recaptcha'], [data-sitekey]",
-    );
     const bodyMentionsRecaptcha = /reCAPTCHA|hCaptcha|Turnstile|captcha/i.test(
       await page.locator("body").innerText().catch(() => ""),
     );
-    if ((await recaptchaMarker.count()) > 0 || bodyMentionsRecaptcha) {
+    if ((await hasAntiBotMarkerOnPage(page)) || bodyMentionsRecaptcha) {
       return {
         broker: this.brokerId,
         status: "requires_manual_verification",

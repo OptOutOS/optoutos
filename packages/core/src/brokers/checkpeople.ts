@@ -2,6 +2,7 @@ import type { Page } from "playwright";
 import type { PiiProfile } from "../pii.js";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
 import type { SearchCandidate } from "./matching.js";
+import { hasAntiBotMarkerOnPage } from "./detection.js";
 
 /**
  * CheckPeople does not expose a way to distinguish "match" from
@@ -157,10 +158,7 @@ export class CheckPeopleAdapter implements BrokerAdapter {
 
     await page.goto(this.optOutUrl, { waitUntil: "domcontentloaded" });
 
-    const challenge = page.locator(
-      ".cf-turnstile, #cf-turnstile, [class*='cf-chl-widget'], .g-recaptcha, [data-sitekey], .h-captcha",
-    );
-    if (await challenge.count()) {
+    if (await hasAntiBotMarkerOnPage(page)) {
       return {
         broker: this.brokerId,
         status: "requires_manual_verification",

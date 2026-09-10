@@ -4,6 +4,7 @@ export * from "./turnstile-solver.js";
 export * from "./turnstile-page-helper.js";
 export * from "./brokers/types.js";
 export * from "./brokers/matching.js";
+export * from "./brokers/detection.js";
 export * from "./brokers/engine.js";
 export * from "./brokers/thatsthem.js";
 export * from "./brokers/advancedbackgroundchecks.js";

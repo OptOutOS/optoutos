@@ -1,6 +1,7 @@
 import type { Page } from "playwright";
 import type { PiiProfile } from "../pii.js";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
+import { hasAntiBotMarkerOnPage } from "./detection.js";
 
 /**
  * Whitepages opt-out adapter.
@@ -50,17 +51,12 @@ export class WhitepagesAdapter implements BrokerAdapter {
     const timestamp = new Date().toISOString();
     await page.goto(this.optOutUrl, { waitUntil: "domcontentloaded" });
 
-    const html = await page.content();
     const title = await page.title();
     const bodyText = await page.locator("body").innerText().catch(() => "");
     const cloudflareBlocked =
       /cloudflare/i.test(title) ||
       /sorry, you have been blocked|unable to access whitepages\.com/i.test(bodyText);
-    const antiBotMarker = page.locator(
-      ".cf-turnstile, #cf-turnstile, [class*='cf-chl-widget'], .g-recaptcha, [data-sitekey*='recaptcha'], .h-captcha, [data-sitekey*='hcaptcha']",
-    );
-    const hasAntiBotMarker = (await antiBotMarker.count()) > 0 ||
-      /cf-turnstile|g-recaptcha|h-captcha/i.test(html);
+    const hasAntiBotMarker = await hasAntiBotMarkerOnPage(page);
 
     if (cloudflareBlocked || hasAntiBotMarker) {
       return {

@@ -2,6 +2,7 @@ import type { Page } from "playwright";
 import type { PiiProfile } from "../pii.js";
 import type { BrokerAdapter, RemovalResult } from "./types.js";
 import type { SearchCandidate } from "./matching.js";
+import { hasAntiBotMarkerOnPage } from "./detection.js";
 
 /**
  * BeenVerified opt-out adapter.
@@ -42,7 +43,7 @@ export class BeenVerifiedAdapter implements BrokerAdapter {
     if (!profile.firstName || !profile.lastName || !profile.addresses?.[0]) return [];
 
     await page.goto(this.searchUrl, { waitUntil: "domcontentloaded" });
-    if (await this.hasAntiBotMarker(page)) return [];
+    if (await hasAntiBotMarkerOnPage(page)) return [];
 
     // The live route renders a client application, but no search controls were
     // safely verifiable. Do not guess selectors or submit identity data.
@@ -57,7 +58,7 @@ export class BeenVerifiedAdapter implements BrokerAdapter {
     }
 
     await page.goto(this.optOutUrl, { waitUntil: "domcontentloaded" });
-    if (await this.hasAntiBotMarker(page)) {
+    if (await hasAntiBotMarkerOnPage(page)) {
       return {
         broker: this.brokerId,
         status: "requires_manual_verification",
@@ -73,11 +74,6 @@ export class BeenVerifiedAdapter implements BrokerAdapter {
       timestamp,
       "BeenVerified opt-out form/listing selectors were not safely verifiable; no request submitted",
     );
-  }
-
-  private async hasAntiBotMarker(page: Page): Promise<boolean> {
-    const html = await page.content();
-    return /(?:hcaptcha|cf-turnstile|turnstile|g-recaptcha|recaptcha)/i.test(html);
   }
 
   private fail(timestamp: string, error: string): RemovalResult {
