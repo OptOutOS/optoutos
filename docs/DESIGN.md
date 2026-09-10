@@ -126,6 +126,44 @@ environment exclusively. A CLI flag value is visible in shell history and to
 any other process via `ps`/Task Manager — an environment variable is not
 (with normal OS process isolation).
 
+### 9. Kanban worker profiles must request review, never self-complete
+(2026-09-10)
+The `optoutos` Hermes kanban board runs a multi-role pipeline
+(`optoutos-orchestrator` / `-dev` / `-secops` / `-docs`) to work through the
+12-broker backlog, deliberately **paused between sessions to control LLM
+API cost** — this is not an oversight, it's the normal operating mode; the
+board is expected to be dispatched in short, explicitly-authorized batches,
+not left running continuously.
+
+**Found 2026-09-10:** the board's `review_dispatch: true` / `request-review`
+flow was fully built (review → approve/request-changes → merge) but never
+used — every worker task went straight from `running` to `done` via
+`kanban_complete`, because nothing in a worker profile's standing
+instructions told it to route through review first. Two completed tasks
+with real, verified work (PublicDataUSA test coverage, a USPhonebook
+reachability re-check) sat unmerged and unreported for ~17-20 hours as a
+result, only found by manually noticing a stray `.worktrees/` directory.
+
+**Decision:** `kanban complete` produces no merge-to-main action on its own
+(confirmed by inspecting every `hermes kanban` subcommand — none touch git
+remotes), and merging a worker's branch should stay a deliberate,
+human-verified step for a PII-handling repo regardless. So the fix is at
+the review gate, not a new merge automation: every content-producing worker
+profile's persistent description (`hermes profile describe <name> --text
+...`, injected as standing context into every task that profile runs) now
+instructs it to call `kanban request-review` instead of `kanban complete`.
+A human (or the `optoutos-orchestrator` profile, invoked manually) approves
+via the review flow; only after that does a human run the actual `git
+merge` + full clean-install verification + push — the same verification
+this repo's CONTRIBUTING.md already requires for any change. See GitHub
+issue #10 (closed) for the full investigation.
+
+**Cost-consciousness applies to this board specifically:** before resuming
+dispatch on `ready`/`todo` tasks, weigh the batch size and LLM cost
+explicitly rather than assuming "more parallel workers" is better — this
+was the original reason the board is paused, and that reasoning doesn't
+go away just because a review gate now exists.
+
 ## Storage backends
 
 Two implementations of one `PeopleStore` interface
