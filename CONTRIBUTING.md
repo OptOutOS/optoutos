@@ -24,7 +24,7 @@ config-only changes.
 
 ```bash
 npm install         # from repo root
-npm run lint         # ESLint, must be clean
+npm run lint         # Rslint, must be clean
 npm run typecheck    # tsc --noEmit, must be clean
 npm run build        # must succeed
 npm test             # all tests must pass
@@ -48,7 +48,10 @@ Any change to a `packages/core/src/brokers/*.ts` adapter must be backed by
 
 ## Code style
 
-- TypeScript, strict mode. ESLint + Prettier enforced in CI.
-- No `any` without a `// eslint-disable-next-line` comment explaining why.
+- TypeScript, strict mode. Rslint (typescript-go native, ESLint-compatible
+  flat config, replaces ESLint + @typescript-eslint — see rslint.shared.ts)
+  + Prettier enforced in CI.
+- No `any` without a `// eslint-disable-next-line` comment explaining why
+  (Rslint understands ESLint-style disable comments).
 - PII is never logged. Loggers/evidence objects must not contain raw PII
   fields — see `SECURITY.md`.
