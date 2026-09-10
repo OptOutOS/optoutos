@@ -1,0 +1,47 @@
+Fix web GUI: distinguish first-time store creation from unlock
+
+Real bug caught by the user directly ("I never set one [a passphrase].
+Shouldn't that be in the webapp?"): LocalEncryptedFileStore.load() on a
+nonexistent file silently returns an empty household, so the unlock
+screen accepted ANY passphrase as if it were correct -- there was no
+"create" vs "unlock" distinction, no confirmation field, and (found while
+writing the regression test) a WRONG passphrase against an EXISTING store
+also silently returned locked:false instead of failing -- a real false
+security signal, not just a missing UI affordance.
+
+- GET /api/unlock/status now also reports storeConfigured and
+  storeExists (checked via fs access(), not a decrypt attempt).
+- POST /api/unlock branches on whether the store file exists yet:
+  - First-time (no file): requires confirmPassphrase to match passphrase.
+    No file has been written yet, so this passphrase is about to become
+    permanent with no recovery path (see THREAT_MODEL.md) -- a typo here
+    with no confirmation would have silently locked the user out of data
+    they hadn't even written.
+  - Returning unlock (file exists): actually attempts
+    LocalEncryptedFileStore.load() with the submitted passphrase and
+    rejects with 401 if it throws, instead of trusting the passphrase
+    blindly. AES-GCM's auth tag makes wrong-key decryption throw
+    (decryptJson in packages/core/src/people/crypto.ts), so this is a
+    real cryptographic check.
+- Frontend: unlock screen now shows "Create household store" / "Choose a
+  passphrase" + a confirm field + an explicit "no recovery if lost"
+  warning on first-time setup, vs. "Unlock household store" / a single
+  password field for a returning unlock. Branches on storeExists from
+  /api/unlock/status.
+
+TDD: 5 new/changed tests in server.test.ts covering mismatched-confirm
+rejection, storeExists:true after a real write, and the wrong-passphrase-
+on-existing-store 401 (this last one is the regression test for the bug
+the user found -- it failed with 200 before this fix, confirmed via a RED
+run before implementing). Existing unlock-flow tests across
+people-routes.test.ts and dashboard-routes.test.ts updated to send
+confirmPassphrase (now required for their first-time-setup helper calls).
+
+Live-verified beyond unit tests: a real HTTP smoke sequence against the
+compiled server exercising every branch (mismatched confirm -> 400,
+matching confirm -> create succeeds, storeExists flips to true after
+lock, wrong passphrase on the now-real store -> 401, correct passphrase
+-> 200 with the real person data intact).
+
+Full clean-install verification: 235 tests total (169 core + 40 CLI + 26
+web), lint/typecheck/build clean on all three packages.

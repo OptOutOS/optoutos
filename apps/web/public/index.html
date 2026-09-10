@@ -14,11 +14,19 @@
 
   <main id="app">
     <section id="unlock-screen">
-      <h2>Unlock household store</h2>
+      <h2 id="unlock-heading">Unlock household store</h2>
       <p id="unlock-source-note"></p>
       <form id="unlock-form">
-        <label for="passphrase-input">Passphrase</label>
+        <label for="passphrase-input" id="passphrase-label">Passphrase</label>
         <input id="passphrase-input" type="password" autocomplete="current-password" />
+        <label for="confirm-passphrase-input" id="confirm-passphrase-field" hidden>
+          Confirm passphrase
+        </label>
+        <input id="confirm-passphrase-input" type="password" autocomplete="new-password" hidden />
+        <p id="first-time-warning" class="hint" hidden>
+          No household store exists yet at this location. The passphrase you choose here
+          becomes permanent — there is no recovery if it's lost. Store it in a password manager.
+        </p>
         <button type="submit">Unlock</button>
       </form>
       <p id="unlock-error" class="error" hidden></p>

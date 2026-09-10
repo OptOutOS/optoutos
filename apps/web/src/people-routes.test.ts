@@ -50,7 +50,7 @@ describe("household management routes", () => {
     await app.request("/api/unlock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ passphrase: "test-pass-123" }),
+      body: JSON.stringify({ passphrase: "test-pass-123", confirmPassphrase: "test-pass-123" }),
     });
   }
 

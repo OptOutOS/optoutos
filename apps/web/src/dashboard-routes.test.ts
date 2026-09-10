@@ -48,7 +48,7 @@ describe("GET /api/people/:id/dashboard", () => {
     await app.request("/api/unlock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ passphrase: "test-pass-123" }),
+      body: JSON.stringify({ passphrase: "test-pass-123", confirmPassphrase: "test-pass-123" }),
     });
     const res = await app.request("/api/people", {
       method: "POST",
@@ -67,7 +67,7 @@ describe("GET /api/people/:id/dashboard", () => {
     await app.request("/api/unlock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ passphrase: "test-pass-123" }),
+      body: JSON.stringify({ passphrase: "test-pass-123", confirmPassphrase: "test-pass-123" }),
     });
     const res = await app.request("/api/people/00000000-0000-4000-8000-000000000000/dashboard");
     expect(res.status).toBe(404);

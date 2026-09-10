@@ -32,7 +32,7 @@ describe("GET /api/unlock/status", () => {
     const res = await app.request("/api/unlock/status");
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ source: "bws", locked: true });
+    expect(await res.json()).toMatchObject({ source: "bws", locked: true });
   });
 
   it("reports the passphrase-prompt fallback when BWS is not configured", async () => {
@@ -43,7 +43,17 @@ describe("GET /api/unlock/status", () => {
     const res = await app.request("/api/unlock/status");
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ source: "passphrase-prompt", locked: true });
+    expect(await res.json()).toMatchObject({ source: "passphrase-prompt", locked: true });
+  });
+
+  it("reports storeConfigured:false when OPTOUTOS_WEB_STORE_PATH is unset", async () => {
+    delete process.env.BWS_ACCESS_TOKEN;
+    delete process.env.OPTOUTOS_BWS_SECRET_ID;
+    delete process.env.OPTOUTOS_WEB_STORE_PATH;
+    app = buildServer();
+
+    const res = await app.request("/api/unlock/status");
+    expect(await res.json()).toMatchObject({ storeConfigured: false, storeExists: false });
   });
 });
 
@@ -65,17 +75,30 @@ describe("POST /api/unlock (passphrase-prompt fallback path)", () => {
     expect(res.status).toBe(400);
   });
 
-  it("accepts a passphrase and reports locked:false afterward, never echoing the passphrase back", async () => {
+  it("requires confirmPassphrase to match on first-time setup (no store file yet)", async () => {
     const res = await app.request("/api/unlock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ passphrase: "correct horse battery staple" }),
+      body: JSON.stringify({ passphrase: "new-pass", confirmPassphrase: "different" }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/match/i);
+
+    const status = await app.request("/api/unlock/status");
+    expect(await status.json()).toMatchObject({ locked: true });
+  });
+
+  it("accepts a passphrase with matching confirmation and reports locked:false afterward, never echoing the passphrase back", async () => {
+    const res = await app.request("/api/unlock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passphrase: "correct horse battery staple", confirmPassphrase: "correct horse battery staple" }),
     });
     expect(res.status).toBe(200);
     expect(JSON.stringify(await res.json())).not.toContain("correct horse battery staple");
 
     const status = await app.request("/api/unlock/status");
-    expect(await status.json()).toEqual({ source: "passphrase-prompt", locked: false });
+    expect(await status.json()).toMatchObject({ source: "passphrase-prompt", locked: false });
   });
 
   it("rejects unlocking via BWS mode with a passphrase payload (wrong mode for this route in this config)", async () => {
@@ -96,6 +119,73 @@ describe("POST /api/unlock (passphrase-prompt fallback path)", () => {
   });
 });
 
+describe("POST /api/unlock against an existing store file", () => {
+  let storeDir: string;
+  let storePath: string;
+  const originalStorePath = process.env.OPTOUTOS_WEB_STORE_PATH;
+
+  beforeEach(async () => {
+    delete process.env.BWS_ACCESS_TOKEN;
+    delete process.env.OPTOUTOS_BWS_SECRET_ID;
+    const { mkdtemp } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    storeDir = await mkdtemp(join(tmpdir(), "optoutos-web-unlock-test-"));
+    storePath = join(storeDir, "household.enc.json");
+    process.env.OPTOUTOS_WEB_STORE_PATH = storePath;
+  });
+
+  afterEach(async () => {
+    const { rm } = await import("node:fs/promises");
+    await rm(storeDir, { recursive: true, force: true });
+    if (originalStorePath === undefined) delete process.env.OPTOUTOS_WEB_STORE_PATH;
+    else process.env.OPTOUTOS_WEB_STORE_PATH = originalStorePath;
+  });
+
+  it("reports storeExists:true once a person has been created", async () => {
+    const app = buildServer();
+    await app.request("/api/unlock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passphrase: "correct-pass", confirmPassphrase: "correct-pass" }),
+    });
+    await app.request("/api/people", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ firstName: "A", lastName: "B" }),
+    });
+    await app.request("/api/lock", { method: "POST" });
+
+    const status = await app.request("/api/unlock/status");
+    expect(await status.json()).toMatchObject({ storeExists: true });
+  });
+
+  it("rejects the wrong passphrase against an existing store with a real decryption check, not a false success", async () => {
+    const app = buildServer();
+    await app.request("/api/unlock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passphrase: "correct-pass", confirmPassphrase: "correct-pass" }),
+    });
+    await app.request("/api/people", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ firstName: "A", lastName: "B" }),
+    });
+    await app.request("/api/lock", { method: "POST" });
+
+    const wrongUnlock = await app.request("/api/unlock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passphrase: "totally-wrong" }),
+    });
+    expect(wrongUnlock.status).toBe(401);
+
+    const status = await app.request("/api/unlock/status");
+    expect(await status.json()).toMatchObject({ locked: true });
+  });
+});
+
 describe("POST /api/lock", () => {
   it("clears an unlocked session back to locked:true", async () => {
     delete process.env.BWS_ACCESS_TOKEN;
@@ -105,7 +195,7 @@ describe("POST /api/lock", () => {
     await app.request("/api/unlock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ passphrase: "x" }),
+      body: JSON.stringify({ passphrase: "x", confirmPassphrase: "x" }),
     });
     let status = await (await app.request("/api/unlock/status")).json();
     expect(status).toMatchObject({ locked: false });

@@ -3,6 +3,7 @@ import { serve, type ServerType } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
+import { access } from "node:fs/promises";
 import {
   resolveUnlockSource,
   InMemoryPassphraseSession,
@@ -61,10 +62,26 @@ export function buildServer(): Hono {
   const app = new Hono();
   const passphraseSession = new InMemoryPassphraseSession();
 
-  app.get("/api/unlock/status", (c) => {
+  async function storeExists(): Promise<boolean> {
+    const storePath = process.env.OPTOUTOS_WEB_STORE_PATH;
+    if (!storePath) return false;
+    try {
+      await access(storePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  app.get("/api/unlock/status", async (c) => {
     const source = resolveUnlockSource();
     const locked = source.kind === "bws" ? true : !passphraseSession.hasPassphrase();
-    return c.json({ source: source.kind, locked });
+    return c.json({
+      source: source.kind,
+      locked,
+      storeConfigured: !!process.env.OPTOUTOS_WEB_STORE_PATH,
+      storeExists: await storeExists(),
+    });
   });
 
   app.post("/api/unlock", async (c) => {
@@ -80,10 +97,38 @@ export function buildServer(): Hono {
       );
     }
 
-    const body = await c.req.json<{ passphrase?: string }>().catch(() => ({}) as { passphrase?: string });
+    const body = await c
+      .req.json<{ passphrase?: string; confirmPassphrase?: string }>()
+      .catch(() => ({}) as { passphrase?: string; confirmPassphrase?: string });
     const passphrase = body?.passphrase;
     if (!passphrase || typeof passphrase !== "string") {
       return c.json({ error: "Missing required field: passphrase" }, 400);
+    }
+
+    const alreadyExists = await storeExists();
+
+    if (!alreadyExists) {
+      // FIRST-TIME SETUP: no encrypted file exists yet, so whatever
+      // passphrase is submitted here becomes the permanent one (there is
+      // no recovery path for a lost passphrase, by design of the
+      // encryption — see docs/THREAT_MODEL.md). Require confirmation so a
+      // typo doesn't silently lock the user out of data they haven't even
+      // written yet.
+      if (body.confirmPassphrase !== passphrase) {
+        return c.json({ error: "Passphrase and confirmation do not match." }, 400);
+      }
+    } else {
+      // RETURNING UNLOCK: a store file already exists. Verify the
+      // passphrase actually decrypts it BEFORE accepting the session as
+      // unlocked — AES-GCM's auth tag makes a wrong-passphrase load()
+      // throw (see packages/core/src/people/crypto.ts decryptJson), so
+      // this is a real cryptographic check, not a guess.
+      const storePath = process.env.OPTOUTOS_WEB_STORE_PATH!;
+      try {
+        await new LocalEncryptedFileStore(storePath, passphrase).load();
+      } catch {
+        return c.json({ error: "Incorrect passphrase." }, 401);
+      }
     }
 
     passphraseSession.unlock(passphrase);

@@ -8,6 +8,11 @@ const unlockSourceNote = document.getElementById("unlock-source-note");
 const unlockForm = document.getElementById("unlock-form");
 const unlockError = document.getElementById("unlock-error");
 const passphraseInput = document.getElementById("passphrase-input");
+const passphraseLabel = document.getElementById("passphrase-label");
+const confirmPassphraseField = document.getElementById("confirm-passphrase-field");
+const confirmPassphraseInput = document.getElementById("confirm-passphrase-input");
+const firstTimeWarning = document.getElementById("first-time-warning");
+const unlockHeading = document.getElementById("unlock-heading");
 const lockButton = document.getElementById("lock-button");
 const peopleTbody = document.getElementById("people-tbody");
 const addPersonForm = document.getElementById("add-person-form");
@@ -43,6 +48,17 @@ async function refreshUnlockStatus() {
     // BWS mode never needs a passphrase submitted from the browser — hide
     // the form entirely so there's nothing confusing to fill in.
     unlockForm.hidden = status.source === "bws";
+
+    // First-time setup (no store file exists yet) vs. returning unlock:
+    // require and show a confirmation field only when this passphrase is
+    // about to become the permanent one for a brand-new store.
+    const firstTime = status.source === "passphrase-prompt" && !status.storeExists;
+    confirmPassphraseField.hidden = !firstTime;
+    confirmPassphraseInput.hidden = !firstTime;
+    confirmPassphraseInput.required = firstTime;
+    firstTimeWarning.hidden = !firstTime;
+    unlockHeading.textContent = firstTime ? "Create household store" : "Unlock household store";
+    passphraseLabel.textContent = firstTime ? "Choose a passphrase" : "Passphrase";
   } else {
     unlockScreen.hidden = true;
     householdScreen.hidden = false;
@@ -54,8 +70,15 @@ unlockForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   unlockError.hidden = true;
   try {
-    await api("/api/unlock", { method: "POST", body: JSON.stringify({ passphrase: passphraseInput.value }) });
+    await api("/api/unlock", {
+      method: "POST",
+      body: JSON.stringify({
+        passphrase: passphraseInput.value,
+        ...(confirmPassphraseInput.hidden ? {} : { confirmPassphrase: confirmPassphraseInput.value }),
+      }),
+    });
     passphraseInput.value = "";
+    confirmPassphraseInput.value = "";
     await refreshUnlockStatus();
   } catch (err) {
     unlockError.textContent = err.message;
