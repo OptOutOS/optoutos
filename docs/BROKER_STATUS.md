@@ -469,3 +469,29 @@ throwaway unused-variable violation into each package and confirmed Rslint
 actually flags it (69 active rules in both) before removing it; confirmed
 `eslint-disable-next-line` comments still suppress rules; live-built and
 smoke-tested the CLI (`list-brokers`); CI and CodeQL both green on `main`.
+
+## Round 9 — PublicDataUSA re-verified unreachable; test gap closed
+(2026-09-09)
+
+Re-ran live DNS verification for `publicdatausa.com` against three
+independent resolvers: the local UDM Pro resolver (192.168.1.1), Cloudflare
+(1.1.1.1), and Google (8.8.8.8). All three still return `SERVFAIL` with no
+address; a direct `curl` also fails to resolve the host. This confirms the
+Round-prior finding still holds — the domain has not come back — so no
+opt-out selectors were written and the placeholder adapter's fail-closed
+behavior is unchanged.
+
+**Real gap found and fixed:** `PublicDataUsaAdapter` had no test file at
+all, unlike every other adapter in the module (e.g.
+`thatsthem-turnstile.test.ts`, `advancedbackgroundchecks.test.ts`). Added
+`publicdatausa.test.ts` (3 tests) asserting: no required/search fields are
+declared, `optOut()` always fails closed with a `DNS_BLOCKED` evidence
+marker and never touches the Playwright `page` object, and the returned
+timestamp is valid ISO 8601. Full quality gates re-run clean: `npm test`
+(170/170: 120 core + 50 CLI), `npm run lint` (Rslint, 0 issues, both
+packages), `npm run typecheck` (both packages), `npm run build` (both
+packages).
+
+**Status: still correctly `failed` (domain unreachable).** No other
+PublicDataUSA action is safe to take until `publicdatausa.com` resolves
+again.
