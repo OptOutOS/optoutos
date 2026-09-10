@@ -120,6 +120,23 @@ outcomes a user would judge this tool on don't exist yet for most brokers.
 
 ## Process gaps worth closing (not code, but real risk)
 
+Tracked as GitHub issues (label: `backlog`) rather than left as prose here —
+see https://github.com/OptOutOS/optoutos/issues?q=is%3Aopen+label%3Abacklog
+for the current live list. As of 2026-09-10:
+
+- [#7](https://github.com/OptOutOS/optoutos/issues/7) Recheck Spokeo
+  `/optout` reachability; unhold candidateId threading.
+- [#8](https://github.com/OptOutOS/optoutos/issues/8) First real, verified
+  end-to-end broker removal submission.
+- [#9](https://github.com/OptOutOS/optoutos/issues/9) Email-based removal
+  path (last-resort fallback).
+- [#10](https://github.com/OptOutOS/optoutos/issues/10) Autonomous/
+  background work has no delivery guarantee to `main` — found 2026-09-10
+  when 20 orphaned git worktrees (2 with real unmerged work) turned up
+  never pushed or reported.
+
+Other standing risks, not yet worth their own issue:
+
 - **Legal/ToS risk**: scraping broker sites for opt-out purposes likely
   violates their Terms of Service even when the intent is benign. Written
   down as an accepted risk in THREAT_MODEL.md.
