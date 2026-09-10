@@ -51,7 +51,7 @@ methods per broker, not just opt-out forms.
 | That'sThem | form | `requires_manual_verification` | Real form fields verified (`#name #street #city #state #zip #email #phone`). Cloudflare Turnstile challenge served to automated browsers; adapter detects and fails closed, per no-CAPTCHA-solving policy. |
 | Advanced Background Checks | form | `requires_manual_verification` | Direct name/email opt-out form found (`#mode #sfn #smn #sln #semail`), protected by reCAPTCHA. Fails closed. |
 | BeenVerified | form | `requires_manual_verification` | Both search/opt-out routes redirect to a JS app shell exposing hCaptcha/Cloudflare Turnstile markers. No selectors guessed. |
-| CheckPeople | form | `failed` (honest, not a bug) | Cloudflare 403-blocked interactively; opt-out flow structure could not be verified, so the adapter refuses to guess rather than fabricate selectors. |
+| CheckPeople | form | `failed` (stale — see Round 10) | Adapter still hard-codes `search() -> []` on an old "IP-banned" assumption, but posture is confirmed genuinely fluctuating (reachable end-to-end via plain curl 2026-09-10 10:35, then Cloudflare-challenged again ~1h later). See Round 10 and `docs/checkpeople-reachability.md` for the full endpoint spec captured while it was open. Adapter should re-probe live per-session, not hard-code either extreme. |
 | InfoTracer | form | `failed` / `requires_manual_verification` | "Are you human?" interactive gate observed; adapter detects known gate markers and fails closed. One test run hit a different rate-limit page and returned `failed` — consistent with the honest-uncertainty design, not a fabricated pass. |
 | Intelius | — (login-gated) | `requires_manual_verification` | The suppression flow (`suppression.peopleconnect.us`) is a login-gated SPA requiring an account/session. No anonymous opt-out path or public API exists. Adapter intentionally does not create accounts or attempt login. |
 | PublicDataUSA | — | `failed` (domain unreachable) | `publicdatausa.com` returns DNS SERVFAIL from both the local resolver and 1.1.1.1 — the domain itself appears dead, independent of this network's filtering. Placeholder adapter documents this rather than silently omitting the broker. |
@@ -495,3 +495,37 @@ packages).
 **Status: still correctly `failed` (domain unreachable).** No other
 PublicDataUSA action is safe to take until `publicdatausa.com` resolves
 again.
+
+## Round 10 — CheckPeople reachability contradicts stale "IP-banned" claim;
+kanban board audit (2026-09-10)
+
+**CheckPeople is not stably IP-banned.** A synthetic end-to-end search
+(homepage → CSRF-token scrape → `POST /landing` → `GET /searching` →
+`GET /results`, fake identity "Zaphod Beeblebrox, Fargo ND") completed
+cleanly with zero anti-bot challenges via plain `curl`, no solver, at
+2026-09-10 10:35 — directly contradicting `docs/FLARESOLVERR.md`'s
+2026-09-09 claim of an IP-level Cloudflare ban. Full endpoint spec,
+required cookies, and the real "no results" signal (`#modifySearchModal`,
+NOT the "10+ Results" headline, which is generic marketing text shown even
+for zero real matches) captured in `docs/checkpeople-reachability.md`.
+
+**But the posture is genuinely inconsistent, not simply "actually open
+now"**: an independent re-check roughly an hour later hit a Cloudflare
+"Under Attack Mode"-style JS-challenge redirect on the same homepage.
+`docs/FLARESOLVERR.md` updated to reflect fluctuating status rather than
+either fixed extreme. `packages/core/src/brokers/checkpeople.ts` still
+hard-codes `search() -> []` on the old assumption — flagged as needing a
+live re-probe rather than a hard-coded verdict, not fixed in this round.
+
+**Separately: audited the `optoutos` kanban board itself** (82 tasks,
+found via a stray `.worktrees/` directory — see GitHub issue #10, closed).
+Found and fixed: `kanban.dispatch_in_gateway` had reverted to `true`,
+contradicting the board's deliberate cost-control pause; reset to `false`
+and the gateway restarted to apply it. Found and merged two more real,
+unmerged worker findings sitting in worktrees since the accidental
+dispatch window (ClustrMaps re-confirmation — commit `f10376d`; this
+CheckPeople doc). Board task chains reviewed against current project
+direction; misaligned chains (BeenVerified full adapter build ahead of an
+undecided account-gating policy; Whitepages chain assuming a solver can
+fix an IP-level block) addressed separately — see DESIGN.md decision #9
+and the board itself for the resulting blocks/edits.

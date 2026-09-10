@@ -22,9 +22,21 @@ anti-bot protection:
 | Advanced Background Checks | ✅ **Unblocked** | FlareSolverr returned real 93KB opt-out form HTML (confirmed real `<form>` + name fields present, not just HTTP 200) |
 | Spokeo | ✅ **Unblocked** | FlareSolverr returned real 153KB opt-out page HTML (confirmed listing/profile-URL opt-out content present) |
 | USPhonebook | ✅ **Unblocked** | FlareSolverr returned real 67KB page HTML with actual form fields present |
-| CheckPeople | ❌ Still blocked | FlareSolverr itself reports an IP-level Cloudflare ban ("Probably your IP is banned for this site") — not a challenge type it can solve |
+| CheckPeople | ⚠️ Posture fluctuates — see below | Not a stable "always blocked" or "always open" state; re-check live per-session rather than trusting either extreme |
 | Whitepages | ❌ Still blocked | Same — IP-level ban reported, not solvable this way |
 | That'sThem | ⚠️ **False positive caught** | FlareSolverr reported "Challenge not detected!" / HTTP 200, but the actual response body's `<title>` is still "Security Check" — a Turnstile interactive challenge FlareSolverr cannot solve. **Always inspect actual response body content, never trust FlareSolverr's own status alone.** |
+
+**CheckPeople posture is genuinely inconsistent, confirmed twice in one day
+(2026-09-10):** a full synthetic search flow (homepage → CSRF token →
+`/landing` POST → `/searching` → `/results`) completed cleanly with zero
+anti-bot challenges at 10:35, using plain `curl` with no solver — see
+`docs/checkpeople-reachability.md` for the full endpoint spec. A follow-up
+plain `curl` check roughly an hour later hit a Cloudflare "Under Attack
+Mode"-style JS-challenge redirect on the homepage. Treat CheckPeople as
+**re-check-live-per-session, not a fixed state** — `packages/core/src/
+brokers/checkpeople.ts` currently hard-codes `search() -> []` based on the
+old "IP-banned" assumption and should be revisited to re-probe live rather
+than assume either extreme.
 
 **End-to-end integration verified for real, not just the raw HTTP layer:**
 after FlareSolverr solved Advanced Background Checks' and USPhonebook's opt-out
